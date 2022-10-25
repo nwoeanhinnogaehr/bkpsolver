@@ -62,7 +62,7 @@ The instances are simple text files with extension `.ki`, in the following forma
 2. The second line contains $C^L$, the lower-level capacity.
 3. The third line contains $C^U$, the upper-level capacity.
 4. The fourth line contains $n$ integers $w^L_1,\dots,w^L_n$ representing the lower-level weights.
-5. The fifth line contains $n$ integers $w^U_1,\dots,w^U_n$ representing the lower-level weights.
+5. The fifth line contains $n$ integers $w^U_1,\dots,w^U_n$ representing the upper-level weights.
 6. The sixth line contains $n$ integers $p_1,\dots,p_n$ representing the profits.
 
 After these 6 lines, the remaining lines of the file may contain metadata information. This information is ignored by the solver but is used by the testing script.

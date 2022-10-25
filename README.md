@@ -17,6 +17,7 @@ Now, create a build directory in the root of this repo:
 Configure and build:
 
 ```
+$ cd build
 $ cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=/usr/bin/clang++
 $ make
 ```

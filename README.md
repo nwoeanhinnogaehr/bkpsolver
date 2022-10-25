@@ -53,6 +53,8 @@ OPTIONS
         <file>      filename (will read from stdin if absent)
 ```
 
+There is also a simple testing script included called `test.py`, which can be used to solve many instances and record timing information into a CSV file. To use the script, you can edit the code at the bottom of the file to use the desired solvers, tests, and CSV file.
+
 # Instance format
 The instances are simple text files with extension `.ki`, in the following format. The file contains at least 6 lines.
 
@@ -66,3 +68,5 @@ The instances are simple text files with extension `.ki`, in the following forma
 After these 6 lines, the remaining lines of the file may contain metadata information. This information is ignored by the solver but is used by the testing script.
 
 The accompanying answer file (for instances where the solution is known) has extension `.ans` and contains a single number: the profit value of an optimal solution.
+
+The file `instances_lit.tar.zst` contains a collection of instances from other papers in the literature, in the original format they were released in. It also contains scripts to convert each of these formats into the simple text format that we use.

@@ -6,10 +6,14 @@
 #include "knapsacksolver/algorithms/minknap.hpp"
 #include <gurobi_c++.h>
 
-#include <bits/stdc++.h>
+#include <vector>
+#include <chrono>
 using namespace std;
 
 BKPSolution<max_pft_t> DCS_BKPSolver::solve() {
+    using namespace std::chrono;
+    auto init_time = high_resolution_clock::now();
+
     grb_env.set("OutputFlag", "0");
     grb_env.set("MIPFocus", "2");
     grb_env.set("Presolve", "2");
@@ -44,6 +48,8 @@ BKPSolution<max_pft_t> DCS_BKPSolver::solve() {
     if (log && L.size()) cerr << "lower bound: " << lp_vals[L[0]] << endl;
     if (L.size() == 0 || lp_vals[L[0]] >= ub.pft) {
         unsort_sol(ub);
+        auto end_time = high_resolution_clock::now();
+        std::cout << "total_time " << duration<double, std::milli>(end_time - init_time).count() << std::endl;
         return ub;
     }
     if (log) cerr << "computing initial upper bound..." << endl;
@@ -62,6 +68,8 @@ BKPSolution<max_pft_t> DCS_BKPSolver::solve() {
         if (log) cerr << "step " << i << " (c=" << L[i]+clb << ")" << endl;
         if (lp_vals[L[i]] >= ub.pft) {
             unsort_sol(ub);
+            auto end_time = high_resolution_clock::now();
+            std::cout << "total_time " << duration<double, std::milli>(end_time - init_time).count() << std::endl;
             return ub;
         }
         solve_model_obj(crit2_lin[L[i]]);
@@ -152,6 +160,9 @@ BKPSolution<max_pft_t> DCS_BKPSolver::solve() {
     }
 
     unsort_sol(ub);
+
+    auto end_time = high_resolution_clock::now();
+    std::cout << "total_time " << duration<double, std::milli>(end_time - init_time).count() << std::endl;
     return ub;
 }
 void DCS_BKPSolver::add_avoid_constraint(GRBModel &model, BKPSolution<max_pft_t> &sol) {

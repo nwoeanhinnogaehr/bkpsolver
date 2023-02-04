@@ -2,6 +2,7 @@
 #include "dcs_solver.hpp"
 #include <clipp.h>
 #include <iostream>
+#include <sys/resource.h>
 using namespace std;
 using namespace clipp;
 
@@ -35,6 +36,23 @@ int main(int argc, char **argv) {
     if(!parse(argc, argv, cli)) {
         cout << make_man_page(cli, argv[0]);
         return 0;
+    }
+
+    cout << "algorithm " << (selected == mode::comb ? "comb" : "dcs") << endl;
+    cout << "file " << (use_file ? filename : "-") << endl;
+    cout << "threads " << num_threads << endl;
+    if (selected == mode::comb) {
+        cout << "lookback " << lookback << endl;
+        cout << "best_prefix " << best_prefix << endl;
+        cout << "weak_lb " << weak_lb << endl;
+        cout << "lb_only " << lb_only << endl;
+    } else {
+        cout << "alpha " << alpha << endl;
+        cout << "beta " << beta << endl;
+        cout << "gamma " << gamma << endl;
+        cout << "delta " << delta << endl;
+        cout << "mu " << mu << endl;
+        cout << "omega " << omega << endl;
     }
 
     BKPInstance inst = use_file
@@ -71,23 +89,39 @@ int main(int argc, char **argv) {
     if (selected == mode::comb) {
         try {
             sol = BKPSolution<max_pft_t>(comb_solver_16.solve());
+            cout << "pft_bits 16" << endl;
         } catch (ProfitOverflowError) {
             if (!quiet)
                 cerr << "profit overflowed 16 bits, retrying with 32 bits" << endl;
             sol = BKPSolution<max_pft_t>(comb_solver_32.solve());
+            cout << "pft_bits 32" << endl;
         }
     } else
         sol = dcs_solver.solve();
 
-    if (!quiet && !lb_only) {
-        cerr << "upper: ";
-        for (size_t i = 0; i < inst.n; i++)
-            cerr << (int)sol.up_sol[i];
-        cerr << endl << "lower: ";
-        for (size_t i = 0; i < inst.n; i++)
-            cerr << (int)sol.lo_sol[i];
-        cerr << endl;
-        cerr << "profit: ";
+    struct rusage rusage;
+    getrusage(RUSAGE_SELF, &rusage);
+    cout << "memory " << rusage.ru_maxrss/1024.0 << endl;
+
+    if (!lb_only) {
+        cout << "upper ";
+        int upper_util = 0;
+        for (size_t i = 0; i < inst.n; i++) {
+            cout << (int)sol.up_sol[i];
+            upper_util += sol.up_sol[i] * inst.up_wt[i];
+        }
+        cout << endl << "lower ";
+        int lower_util = 0;
+        for (size_t i = 0; i < inst.n; i++) {
+            cout << (int)sol.lo_sol[i];
+            lower_util += sol.lo_sol[i] * inst.lo_wt[i];
+        }
+        cout << endl;
+        cout << "upper_util " << upper_util << endl;
+        cout << "upper_cap " << inst.up_cap << endl;
+        cout << "lower_util " << lower_util << endl;
+        cout << "lower_cap " << inst.lo_cap << endl;
+        cout << "profit ";
     }
     cout << sol.pft << endl;
 }

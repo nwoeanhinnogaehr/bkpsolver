@@ -10,6 +10,7 @@
 
 #include <vector>
 #include <iostream>
+#include <chrono>
 
 struct ProfitOverflowError {};
 
@@ -49,31 +50,42 @@ private:
     std::vector<uint8_t> cur_up_sol;
     std::vector<size_t> lo_greedy_items;
     std::vector<int> min_upper, min_lower;
-    uint64_t nodes = 0, leaves = 0;
+    uint64_t nodes = 0, leaves = 0, max_depth = 0, sum_depth = 0;
+    std::chrono::system_clock::time_point opt_time;
 
     using BKPSolver<P>::inst;
 };
 
 template<typename P>
 BKPSolution<P> Comb_BKPSolver<P>::solve() {
+    using namespace std::chrono;
+
+    auto init_time = high_resolution_clock::now();
+    
     grb_env.set("OutputFlag", "0");
     grb_env.start();
 
     BKPSolver<P>::sort_inst();
 
     if (!lb_only) {
+        if (log) std::cerr << "initial bound test... ";
         BKPSolution<max_pft_t> initial_ub = greedy_ub();
         if (initial_ub.pft >= (1ull<<(8*sizeof(P))))
             throw ProfitOverflowError{};
-        if (log) std::cerr << "initial bound test... ";
-        if (initial_ub.pft <= dcs_lb()) {
+        std::cout << "greedy_ub " << initial_ub.pft << std::endl;
+        P lb = dcs_lb();
+        std::cout << "dcs_lb " << lb << std::endl;
+        auto initial_bound_end_time = high_resolution_clock::now();
+        std::cout << "initial_bound_test_time " << duration<double, std::milli>(initial_bound_end_time - init_time).count() << std::endl;
+        if (initial_ub.pft <= lb) {
             if (log) std::cerr << "done, returning early" << std::endl;
+            std::cout << "total_time " << duration<double, std::milli>(initial_bound_end_time - init_time).count() << std::endl;
             return initial_ub;
         }
         ub = initial_ub;
-        if (log) std::cerr << "done, initial upper bound: " << ub.pft << std::endl;
     }
 
+    auto lb_start_time = high_resolution_clock::now();
     if (log) std::cerr << "computing lower bounds... ";
     if (weak_lb) compute_lower_bound_weak();
     else compute_lower_bound();
@@ -81,32 +93,49 @@ BKPSolution<P> Comb_BKPSolver<P>::solve() {
         ub.pft = lower_bound(0, inst.up_cap, inst.lo_cap);
         return ub;
     }
+    std::cout << "dp_lb " << lower_bound(0, inst.up_cap, inst.lo_cap) << std::endl;
+    auto lb_end_time = high_resolution_clock::now();
+    std::cout << "dp_lb_time " << duration<double, std::milli>(lb_end_time - lb_start_time).count() << std::endl;
 
-    if (log) std::cerr << "done, lower bound: " << lower_bound(0, inst.up_cap, inst.lo_cap) << std::endl;
-
+    opt_time = lb_end_time;
     if (log) std::cerr << "starting search... " << std::endl;
     cur_up_sol.resize(inst.n+1);
     fill(cur_up_sol.begin(), cur_up_sol.end(), 1);
     solve_rec(0, inst.up_cap, inst.lo_cap, 0);
-    if (log) std::cerr << "solved: searched " << nodes << " nodes and " << leaves << " leaves" << std::endl;
+    std::cout << "nodes " << nodes << std::endl;
+    std::cout << "leaves " << leaves << std::endl;
 
     BKPSolver<P>::unsort_sol(ub);
+
+    auto bnb_end_time = high_resolution_clock::now();
+    std::cout << "bnb_time " << duration<double, std::milli>(bnb_end_time - lb_end_time).count() << std::endl;
+    std::cout << "opt_time " << duration<double, std::milli>(opt_time - lb_end_time).count() << std::endl;
+    std::cout << "proof_time " << duration<double, std::milli>(bnb_end_time - opt_time).count() << std::endl;
+    std::cout << "total_time " << duration<double, std::milli>(bnb_end_time - init_time).count() << std::endl;
+
+    std::cout << "max_depth " << max_depth << std::endl;
+    std::cout << "avg_depth " << sum_depth/(double)nodes << std::endl;
+ 
     return ub;
 }
 
 template<typename P>
 void Comb_BKPSolver<P>::solve_rec(size_t i, int up_cap, int lo_cap, int pft) {
+    max_depth = std::max(max_depth, i);
+    sum_depth += i;
+    nodes++;
+
     if (i == inst.n) {
         leaves++;
         BKPSolution<P> resp = solve_lower();
         if (resp.pft < ub.pft) {
             ub = resp;
             if (log) std::cerr << "new upper bound: " << ub.pft << std::endl;
+            opt_time = std::chrono::high_resolution_clock::now();
         }
         return;
     }
 
-    nodes++;
     if (log) if (nodes % (1<<20) == 0) {
         std::cerr << (nodes >> 20) << "M nodes and " << leaves << " leaves searched" << std::endl;
         std::cerr << "current node: ";

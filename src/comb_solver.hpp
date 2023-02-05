@@ -123,7 +123,6 @@ template<typename P>
 void Comb_BKPSolver<P>::solve_rec(size_t i, int up_cap, int lo_cap, int pft) {
     max_depth = std::max(max_depth, i);
     sum_depth += i;
-    nodes++;
 
     if (i == inst.n) {
         leaves++;
@@ -135,6 +134,8 @@ void Comb_BKPSolver<P>::solve_rec(size_t i, int up_cap, int lo_cap, int pft) {
         }
         return;
     }
+
+    nodes++;
 
     if (log) if (nodes % (1<<20) == 0) {
         std::cerr << (nodes >> 20) << "M nodes and " << leaves << " leaves searched" << std::endl;
@@ -232,7 +233,7 @@ bool Comb_BKPSolver<P>::lower_bound_test(size_t i, int up_cap, int lo_cap, int p
                but this is the hottest loop in the program for many hard instances.
                Original code:
 
-            for (int k = min_lower[i]; k <= inst.lo_cap-min_lower[i]; k++)
+            for (int k = min_lower[i]; k <= inst.lo_cap; k++)
                 if (lb_pre_tab[next*(inst.lo_cap+1) + inst.lo_cap - k]
                         + lower_bound(i, up_cap, k) >= ub.pft)
                     return true;
@@ -242,7 +243,7 @@ bool Comb_BKPSolver<P>::lower_bound_test(size_t i, int up_cap, int lo_cap, int p
             if (lb_pre_tab[next*(inst.lo_cap+1)+inst.lo_cap] >= ub.pft)
                 return true;
             const int block_size = 256;
-            int k = min_lower[i];
+            int k = 0;
             P best = 0;
             for (; k <= inst.lo_cap-min_lower[i]-block_size+1; k += block_size) {
                 for (int j = k; j < k+block_size; j++) {

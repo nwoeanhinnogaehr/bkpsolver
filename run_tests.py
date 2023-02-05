@@ -39,7 +39,7 @@ ERR_TIMEOUT = "timeout"
 ERR_MEMORY = "memory"
 ERR_RETCODE = "retcode"
 ERR_PARSE = "parse"
-ERR_WRONG = "wrong answer"
+ERR_WRONG = "wronganswer"
 ERR_OTHER = "other"
 
 def run_test(solver, test, timeout):
@@ -109,15 +109,15 @@ def run_test(solver, test, timeout):
         if solver.mode == EXACT:
             if int(result["expected_profit"]) != int(result["profit"]):
                 result["status"] = ERR_WRONG
-                result["error"] = "expected == {}".format(result.expected_opt)
+                result["error"] = "expected == {}".format(result["expected_profit"])
         if solver.mode == LOWER_BOUND:
             if int(result["expected_profit"]) < int(result["profit"]):
                 result["status"] = ERR_WRONG
-                result["error"] = "expected <= {}".format(result.expected_opt)
+                result["error"] = "expected <= {}".format(result["expected_profit"])
         if solver.mode == UPPER_BOUND:
             if int(result["expected_profit"]) > int(result["profit"]):
                 result["status"] = ERR_WRONG
-                result["error"] = "expected >= {}".format(result.expected_opt)
+                result["error"] = "expected >= {}".format(result["expected_profit"])
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, "w") as f:

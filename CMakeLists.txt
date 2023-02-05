@@ -5,6 +5,7 @@ project(BKPSolver)
 add_compile_options(
     -march=native
     -mtune=native
+    -mprefer-vector-width=512
 )
 
 list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})

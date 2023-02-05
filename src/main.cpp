@@ -117,10 +117,8 @@ int main(int argc, char **argv) {
             lower_util += sol.lo_sol[i] * inst.lo_wt[i];
         }
         cout << endl;
-        cout << "upper_util " << upper_util << endl;
-        cout << "upper_cap " << inst.up_cap << endl;
-        cout << "lower_util " << lower_util << endl;
-        cout << "lower_cap " << inst.lo_cap << endl;
+        cout << "up_util " << upper_util << endl;
+        cout << "lo_util " << lower_util << endl;
         cout << "profit ";
     }
     cout << sol.pft << endl;

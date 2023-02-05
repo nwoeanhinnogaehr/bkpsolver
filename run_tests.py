@@ -55,12 +55,14 @@ def run_test(solver, test, timeout):
         "status": "ok"
     }
 
+    output_file = output_dir + "/" + test.filename[10:-2] + "_".join(solver.args) + ".result"
+
     if solver.mode == GENERATE_SOL:
         if os.path.exists(test.filename[:-2] + "ans"):
             print("answer file exists, not generating")
             return result
     else:
-        if os.path.exists(output_dir + "/" + test.filename[10:-2] + "result"):
+        if os.path.exists(output_file):
             print("test already run, skipping")
             result["status"] = "skip"
             return result
@@ -117,8 +119,8 @@ def run_test(solver, test, timeout):
                 result["status"] = ERR_WRONG
                 result["error"] = "expected >= {}".format(result.expected_opt)
 
-    os.makedirs(os.path.dirname(output_dir + "/" + test.filename[10:-2] + "result"), exist_ok=True)
-    with open(output_dir + "/" + test.filename[10:-2] + "result", "w") as f:
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    with open(output_file, "w") as f:
         for key in result:
             f.write(str(key) + " " + str(result[key]) + "\n")
     
@@ -182,5 +184,5 @@ all_solvers = [
 tests = get_all_tests()
 #tests = list(filter(lambda t: t.group == "CCLW", tests))
 os.makedirs(output_dir, exist_ok=True)
-with open(output_dir + "/all_results", "w+") as f:
+with open(output_dir + "/all_results", "a") as f:
     run_tests(all_solvers, tests, f, timeout=3600)

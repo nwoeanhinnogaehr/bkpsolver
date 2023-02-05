@@ -54,7 +54,9 @@ OPTIONS
         <file>      filename (will read from stdin if absent)
 ```
 
-There is also a simple testing script included called `test.py`, which can be used to solve many instances and record timing information into a CSV file. To use the script, you can edit the code at the bottom of the file to use the desired solvers, tests, and CSV file.
+There is also a simple testing script included called `run_tests.py`, which can be used to solve many
+instances and record timing information into a CSV file. To use the script, you can edit the code at
+the bottom of the file to use the desired solvers, tests, and CSV file.
 
 # Instance format
 The instances are simple text files with extension `.ki`, in the following format. The file contains at least 6 lines.
@@ -71,3 +73,38 @@ After these 6 lines, the remaining lines of the file may contain metadata inform
 The accompanying answer file (for instances where the solution is known) has extension `.ans` and contains a single number: the profit value of an optimal solution.
 
 The file `instances_lit.tar.zst` contains a collection of instances from other papers in the literature, in the original format they were released in. It also contains scripts to convert each of these formats into the simple text format that we use.
+
+# Output format
+
+Here is an example of some output from the solver, annotated with the meaning of each line.
+All time measurements are wall-clock time, in milliseconds.
+
+```
+algorithm comb # which algorithm was used (either comb or dcs)
+file instances/CCLW/CCLW_n35_m0.ki # filename of instance
+threads 4 # number of threads used in computation
+lookback 0 # how far to look back when greedily computing LB prefix (not used in paper)
+best_prefix 1 # whether to use the best prefix (always set to 1 in paper)
+weak_lb 0 # whether to use the weak lower bound
+lb_only 0 # whether to only compute the lower bound
+greedy_ub 285 # profit obtained by GreedyHeuristic upper bound
+dcs_lb 218 # LP based lower bound, similar to DCS lower bound
+initial_bound_test_time 11.5848 # time in milliseconds to compute greedy_ub and dcs_lb
+dp_lb 279 # DP lower bound value
+dp_lb_time 0.915699 # time to compute DP lower bound
+nodes 45 # number of branch and bound nodes explored
+leaves 1 # number of branch and bound leaves
+bnb_time 0.28387 # total time for branch and bound
+opt_time 0.272626 # time for branch and bound to find an optimal solution
+proof_time 0.011244 # time for branch and bound to prove optimality
+total_time 12.8214 # total time to solve the instance
+max_depth 35 # max depth explored by branch and bound
+avg_depth 15.1556 # average depth explored by branch and bound
+pft_bits 16 # number of bits used to store profit values
+memory 23.9492 # maximum memory usage in megabytes
+upper 00000000100100001001100000001001000 # upper level solution (item 1 on left)
+lower 10101000000000100000010000000000100 # lower level solution 
+up_util 152 # how much upper level capacity was used
+lo_util 155 # how much lower level capacity was used
+profit 279 # solution profit value
+```

@@ -177,12 +177,16 @@ def get_all_tests():
 
 output_dir = "test_results"
 all_solvers = [
-    Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q"], EXACT),
-    Solver("build/bkpsolver", ["dcs", "-a2", "-b2", "-g5", "-d20", "-m1000", "-o5", "-q"], EXACT)
+    Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j1"], EXACT),
+    Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j4"], EXACT),
+    Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j16"], EXACT),
+    #Solver("build/bkpsolver", ["dcs", "-a2", "-b2", "-g5", "-d20", "-m1000", "-o5", "-q"], EXACT)
 ]
 
 tests = get_all_tests()
-#tests = list(filter(lambda t: t.group == "CCLW", tests))
+new_tests = list(filter(lambda t: t.group in ["New", None], tests))
+lit_tests = list(filter(lambda t: t.group in ["CCLW", "DCS", "FMS", "TRS", "DeNegre"], tests))
 os.makedirs(output_dir, exist_ok=True)
 with open(output_dir + "/all_results", "a") as f:
-    run_tests(all_solvers, tests, f, timeout=3600)
+    run_tests(all_solvers, lit_tests, f, timeout=3600)
+    run_tests(all_solvers, new_tests, f, timeout=900)

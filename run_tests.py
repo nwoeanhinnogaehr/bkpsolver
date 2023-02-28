@@ -52,7 +52,8 @@ def run_test(solver, test, timeout):
         "group": str(test.group),
         "cls": str(test.cls),
         "ins": str(test.ins),
-        "status": "ok"
+        "status": "ok",
+        "file": test.filename
     }
 
     result["solver_cmdline"] = "_".join(solver.args)
@@ -133,9 +134,8 @@ def run_tests(solvers, tests, f, timeout=3):
             print(result["status"])
             if result["status"] not in ["ok", "skip"]:
                 nfail += 1
-            if result["status"] != "skip":
-                f.write(str(result) + "\n")
-                f.flush()
+            f.write(str(result) + "\n")
+            f.flush()
     if nfail > 0:
         print("\n{} FAILURES".format(nfail))
 

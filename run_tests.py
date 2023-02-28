@@ -55,6 +55,7 @@ def run_test(solver, test, timeout):
         "status": "ok"
     }
 
+    result["solver_cmdline"] = "_".join(solver.args)
     output_file = output_dir + "/" + test.filename[10:-2] + "_".join(solver.args) + ".result"
 
     if solver.mode == GENERATE_SOL:
@@ -63,7 +64,6 @@ def run_test(solver, test, timeout):
             return result
     else:
         if os.path.exists(output_file):
-            print("test already run, skipping")
             result["status"] = "skip"
             return result
             
@@ -84,7 +84,6 @@ def run_test(solver, test, timeout):
     if result["status"] != ERR_TIMEOUT and proc.returncode != 0:
         result["status"] = ERR_RETCODE
         result["error"] = "{}".format(proc.returncode)
-        return result
 
     try:
         for line in stdout_data.splitlines():
@@ -95,13 +94,13 @@ def run_test(solver, test, timeout):
         result["error"] = stdout_data.strip()
         return result
 
-    if result["status"] != ERR_TIMEOUT:
+    if result["status"] == "ok":
         try:
             with open(test.filename[:-2] + "ans", "r") as f:
                 result["expected_profit"] = f.read()
         except FileNotFoundError:
             print("answer file doesn't exist, generating")
-            result["expected_profit"] = result["profit"]
+            result["expected_profit"] = result["profit"].strip()
             with open(test.filename[:-2] + "ans", "w") as f:
                 f.write(result["profit"])
                 f.write("\n")
@@ -109,15 +108,15 @@ def run_test(solver, test, timeout):
         if solver.mode == EXACT:
             if int(result["expected_profit"]) != int(result["profit"]):
                 result["status"] = ERR_WRONG
-                result["error"] = "expected == {}".format(result["expected_profit"])
+                result["error"] = "expected=={}".format(result["expected_profit"])
         if solver.mode == LOWER_BOUND:
             if int(result["expected_profit"]) < int(result["profit"]):
                 result["status"] = ERR_WRONG
-                result["error"] = "expected <= {}".format(result["expected_profit"])
+                result["error"] = "expected<={}".format(result["expected_profit"])
         if solver.mode == UPPER_BOUND:
             if int(result["expected_profit"]) > int(result["profit"]):
                 result["status"] = ERR_WRONG
-                result["error"] = "expected >= {}".format(result["expected_profit"])
+                result["error"] = "expected>={}".format(result["expected_profit"])
 
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, "w") as f:

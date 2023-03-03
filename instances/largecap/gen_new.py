@@ -25,9 +25,9 @@ def write_instance(n, p, cu, cl, wu, wl, meta={"group":"LargeCap"}):
             f.write("{} {}\n".format(key, meta[key]))
         num_inst += 1
 
-sizes = [10, 20, 30]
+sizes = [5, 10, 20, 30]
 n_of_each = 1
-R = [10000, 100000, 1000000]
+R = [1000, 10000, 100000, 1000000]
 
 for j in range(len(sizes)):
     n = sizes[j]

@@ -4,7 +4,7 @@
 #include "bkp_solver.hpp"
 
 #include "knapsacksolver/solution.hpp"
-#include "knapsacksolver/algorithms/minknap.hpp"
+#include "knapsacksolver/algorithms/algorithms.hpp"
 #include <gurobi_c++.h>
 #include <omp.h>
 
@@ -177,9 +177,9 @@ BKPSolution<P> Comb_BKPSolver<P>::solve_lower() {
     for (int i = 0; i < inst.n; i++)
         if (!cur_up_sol[i])
             finst.add_item(inst.lo_wt[i], inst.pft[i]);
-    knapsacksolver::MinknapOptionalParameters param;
+    knapsacksolver::DynamicProgrammingPrimalDualOptionalParameters param;
     param.set_combo();
-    auto foutput = knapsacksolver::minknap(finst, param);
+    auto foutput = knapsacksolver::dynamic_programming_primal_dual(finst, param);
     auto fsol = foutput.solution;
     BKPSolution<P> bkpsol(inst.n);
     bkpsol.pft = fsol.profit();
@@ -383,9 +383,9 @@ BKPSolution<max_pft_t> Comb_BKPSolver<P>::greedy_ub() {
     kpinst.set_capacity(inst.up_cap);
     for (int i = 0; i < inst.n; i++)
         kpinst.add_item(inst.up_wt[i], inst.pft[i]);
-    knapsacksolver::MinknapOptionalParameters param;
+    knapsacksolver::DynamicProgrammingPrimalDualOptionalParameters param;
     param.set_combo();
-    auto output = knapsacksolver::minknap(kpinst, param);
+    auto output = knapsacksolver::dynamic_programming_primal_dual(kpinst, param);
     auto sol = output.solution;
 
     knapsacksolver::Instance finst;
@@ -399,7 +399,7 @@ BKPSolution<max_pft_t> Comb_BKPSolver<P>::greedy_ub() {
             bkpsol.up_sol[i] = 1;
         }
     }
-    auto foutput = knapsacksolver::minknap(finst, param);
+    auto foutput = knapsacksolver::dynamic_programming_primal_dual(finst, param);
     auto fsol = foutput.solution;
     for (int i = 0; i < inst.n; i++) {
         if (sol.contains_idx(i)) continue;

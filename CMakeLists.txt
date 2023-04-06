@@ -20,7 +20,7 @@ add_executable(bkpsolver
    src/bkp_instance.cpp
    src/dcs_solver.cpp
    src/main.cpp)
-target_link_libraries(bkpsolver knapsacksolver minknap surrelax greedy dantzig info)
+target_link_libraries(bkpsolver knapsacksolver info greedy upper_bound_dantzig surrogate_relaxation dynamic_programming_primal_dual)
 target_link_libraries(bkpsolver gurobi_g++5.2)
 target_link_libraries(bkpsolver ${GUROBI_CXX_LIBRARY})
 target_link_libraries(bkpsolver ${GUROBI_LIBRARY})

@@ -1,6 +1,6 @@
 #include "knapsacksolver/instance.hpp"
 #include "knapsacksolver/solution.hpp"
-#include "knapsacksolver/algorithms/dembo.hpp"
+#include "knapsacksolver/algorithms/upper_bound_dembo.hpp"
 
 #include <sstream>
 #include <iomanip>
@@ -11,13 +11,20 @@ using namespace knapsacksolver;
 /////////////////////////////// Create instances ///////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-Instance::Instance(): f_(0), l_(-1) { }
-
-void Instance::add_item(Weight w, Profit p)
+Instance::Instance():
+    f_(0),
+    l_(-1)
 {
-    ItemIdx j = items_.size();
-    items_.push_back({j, w, p});
-    l_ = j;
+}
+
+void Instance::add_item(Weight weight, Profit profit)
+{
+    Item item;
+    item.j = items_.size();
+    item.w = weight;
+    item.p = profit;
+    items_.push_back(item);
+    l_ = items_.size() - 1;
 }
 
 void Instance::clear()
@@ -185,15 +192,21 @@ Instance::Instance(const Instance& instance):
 {
     if (instance.optimal_solution() != nullptr) {
         optimal_solution_ = std::unique_ptr<Solution>(new Solution(*this));
-        *optimal_solution_ = *instance.optimal_solution();
+        for (ItemIdx j = 0; j < number_of_items(); ++j)
+            if (instance.optimal_solution()->contains(j))
+                optimal_solution_->set(j, 1);
     }
     if (instance.break_solution() != nullptr) {
         break_solution_ = std::unique_ptr<Solution>(new Solution(*this));
-        *break_solution_ = *instance.break_solution();
+        for (ItemIdx j = 0; j < number_of_items(); ++j)
+            if (instance.break_solution()->contains(j))
+                break_solution_->set(j, 1);
     }
     if (instance.reduced_solution() != nullptr) {
         reduced_solution_ = std::unique_ptr<Solution>(new Solution(*this));
-        *reduced_solution_ = *instance.reduced_solution();
+        for (ItemIdx j = 0; j < number_of_items(); ++j)
+            if (instance.reduced_solution()->contains(j))
+                reduced_solution_->set(j, 1);
     }
 }
 
@@ -216,15 +229,21 @@ Instance& Instance::operator=(const Instance& instance)
 
         if (instance.optimal_solution() != nullptr) {
             optimal_solution_ = std::unique_ptr<Solution>(new Solution(*this));
-            *optimal_solution_ = *instance.optimal_solution();
+            for (ItemIdx j = 0; j < number_of_items(); ++j)
+                if (instance.optimal_solution()->contains(j))
+                    optimal_solution_->set(j, 1);
         }
         if (instance.break_solution() != nullptr) {
             break_solution_ = std::unique_ptr<Solution>(new Solution(*this));
-            *break_solution_ = *instance.break_solution();
+            for (ItemIdx j = 0; j < number_of_items(); ++j)
+                if (instance.break_solution()->contains(j))
+                    break_solution_->set(j, 1);
         }
         if (instance.reduced_solution() != nullptr) {
             reduced_solution_ = std::unique_ptr<Solution>(new Solution(*this));
-            *reduced_solution_ = *instance.reduced_solution();
+            for (ItemIdx j = 0; j < number_of_items(); ++j)
+                if (instance.reduced_solution()->contains(j))
+                    reduced_solution_->set(j, 1);
         }
     }
     return *this;
@@ -235,11 +254,11 @@ Instance::~Instance() { }
 Instance Instance::reset(const Instance& instance)
 {
     Instance instance_new;
-    instance_new.items_  = instance.items_;
+    instance_new.items_ = instance.items_;
     instance_new.capacity_ = instance.capacity_;
     instance_new.f_ = 0;
     instance_new.l_ = instance.items_.size() - 1;
-    return instance;
+    return instance_new;
 }
 
 bool Instance::check()
@@ -330,9 +349,18 @@ std::vector<Item> Instance::get_isum() const
     std::vector<Item> isum;
     isum.reserve(number_of_items()+1);
     isum.clear();
-    isum.push_back({0, 0, 0});
-    for (ItemPos j = 1; j <= number_of_items(); ++j)
-        isum.push_back({j, isum[j - 1].w + item(j - 1).w, isum[j - 1].p + item(j - 1).p});
+    Item it;
+    it.j = 0;
+    it.w = 0;
+    it.p = 0;
+    isum.push_back(it);
+    for (ItemPos j = 1; j <= number_of_items(); ++j) {
+        Item it;
+        it.j = j;
+        it.w = isum[j - 1].w + item(j - 1).w;
+        it.p = isum[j - 1].p + item(j - 1).p;
+        isum.push_back(it);
+    }
     return isum;
 }
 
@@ -621,7 +649,7 @@ void Instance::sort_right(Profit lb FFOT_DBG(FFOT_COMMA Info& info))
         Profit p = break_solution()->profit() + item(break_item()).p + item(j).p;
         Weight r = break_capacity() - item(break_item()).w - item(j).w;
         assert(r < 0);
-        Profit ub = ub_dembo_rev(*this, break_item(), p, r);
+        Profit ub = upper_bound_dembo_rev(*this, break_item(), p, r);
         FFOT_LOG(info, " ub " << ub);
         if (item(j).w <= reduced_capacity() && ub > lb) {
             k++;
@@ -662,7 +690,7 @@ void Instance::sort_left(Profit lb FFOT_DBG(FFOT_COMMA Info& info))
         Profit p = break_solution()->profit() - item(j).p;
         Weight r = break_capacity() + item(j).w;
         assert(r > 0);
-        Profit ub = ub_dembo(*this, break_item(), p, r);
+        Profit ub = upper_bound_dembo(*this, break_item(), p, r);
         FFOT_LOG(info, " ub " << ub);
         if (item(j).w <= reduced_capacity() && ub > lb) {
             k--;
@@ -1015,10 +1043,10 @@ void Instance::reduce1(Profit lb, Info& info)
 
     remove_big_items(FFOT_DBG(info));
 
-    FFOT_VER(info, "Reduction: " << lb << " - "
+    info.os() << "Reduction: " << lb << " - "
             << "n " << reduced_number_of_items() << "/" << number_of_items()
             << " ("  << ((double)reduced_number_of_items() / (double)number_of_items()) << ") -"
-            << " c " << ((double)reduced_capacity()    / (double)capacity()) << std::endl);
+            << " c " << ((double)reduced_capacity()    / (double)capacity()) << std::endl;
     FFOT_LOG(info, "n " << reduced_number_of_items() << "/" << number_of_items() << std::endl);
     FFOT_LOG(info, "c " << reduced_capacity() << "/" << capacity() << std::endl);
     FFOT_LOG_FOLD_END(info, "reduce1");
@@ -1047,7 +1075,10 @@ void Instance::reduce2(Profit lb, Info& info)
 
     for (ItemPos j = f_; j <= b_; ++j) {
         FFOT_LOG(info, "j " << j << " (" << item(j) << ")");
-        Item ubitem = {0, capacity() + item(j).w, 0};
+        Item ubitem;
+        ubitem.j = 0;
+        ubitem.w = capacity() + item(j).w;
+        ubitem.p = 0;
         ItemPos bb = ub_item(isum, ubitem);
         FFOT_LOG(info, " bb " << bb);
         Profit ub = 0;
@@ -1082,7 +1113,10 @@ void Instance::reduce2(Profit lb, Info& info)
             continue;
         FFOT_LOG(info, "j " << j << " (" << item(j) << ")");
 
-        Item ubitem = {0, capacity() - item(j).w, 0};
+        Item ubitem;
+        ubitem.j = 0;
+        ubitem.w = capacity() - item(j).w;
+        ubitem.p = 0;
         ItemPos bb = ub_item(isum, ubitem);
         FFOT_LOG(info, " bb " << bb);
 
@@ -1128,10 +1162,10 @@ void Instance::reduce2(Profit lb, Info& info)
     remove_big_items(FFOT_DBG(info));
     compute_break_item(FFOT_DBG(info));
 
-    FFOT_VER(info, "Reduction: " << lb << " - "
+    info.os() << "Reduction: " << lb << " - "
             << "n " << reduced_number_of_items() << "/" << number_of_items()
             << " ("  << ((double)reduced_number_of_items() / (double)number_of_items()) << ") -"
-            << " c " << ((double)reduced_capacity()    / (double)capacity()) << std::endl);
+            << " c " << ((double)reduced_capacity()    / (double)capacity()) << std::endl;
     FFOT_LOG(info, "n " << reduced_number_of_items() << "/" << number_of_items() << std::endl);
     FFOT_LOG(info, "c " << reduced_capacity() << "/" << capacity() << std::endl);
     FFOT_LOG(info, "reduced solution " << reduced_solution()->to_string_items() << std::endl);
@@ -1236,7 +1270,7 @@ void Instance::surrogate(Weight multiplier, ItemIdx bound, ItemPos first FFOT_DB
     }
     capacity_ += multiplier * bound;
     if (capacity_ <= reduced_solution()->weight())
-        capacity_ =  reduced_solution()->weight();
+        capacity_ = reduced_solution()->weight();
 
     sort_status_ = 0;
     sort_partially(FFOT_DBG(info));
@@ -1405,8 +1439,8 @@ void knapsacksolver::init_display(
         const Instance& instance,
         optimizationtools::Info& info)
 {
-    FFOT_VER(info,
-               "=====================================" << std::endl
+    info.os()
+            << "=====================================" << std::endl
             << "           Knapsack Solver           " << std::endl
             << "=====================================" << std::endl
             << std::endl
@@ -1414,5 +1448,5 @@ void knapsacksolver::init_display(
             << "--------" << std::endl
             << "Number of items:  " << instance.number_of_items() << std::endl
             << "Capacity:         " << instance.capacity() << std::endl
-            << std::endl);
+            << std::endl;
 }

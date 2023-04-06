@@ -1,79 +1,6 @@
-#pragma once
-
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <mutex>
-#include <iomanip>
-#include <memory>
-
-#include <nlohmann/json.hpp>
-
-#define FFOT_VER(info, message) \
-    if (info.output->verbose) { \
-        info.output->mutex_cout.lock(); \
-        std::cout << message; \
-        info.output->mutex_cout.unlock(); \
-    }
-
-#define FFOT_PUT(info, category, key, value) \
-    info.output->mutex_json.lock(); \
-    info.output->j[category][key] = value; \
-    info.output->mutex_json.unlock();
-
-#define FFOT_COMMA ,
-
-#ifdef NDEBUG
-
-#define FFOT_DBG(x)
-#define FFOT_LOG(info, message) {  }
-#define FFOT_LOG_FOLD_START(info, message) {  }
-#define FFOT_LOG_FOLD_END(info, message) {  }
-#define FFOT_LOG_FOLD(info, message) {  }
-#define FFOT_LOG_ON(info) {  }
-#define FFOT_LOG_OFF(info) {  }
-
-#else
-
-#define FFOT_DBG(x) x
-#define FFOT_LOG(info, message) \
-    { \
-        if (info.logger->on && info.logger->level <= info.logger->maximum_log_level) { \
-            if (info.logger->log_file.is_open()) \
-                info.logger->log_file << message; \
-            if (info.logger->log2stderr) \
-                std::cerr << message; \
-        } \
-    }
-#define FFOT_LOG_FOLD_START(info, message) \
-    { \
-        info.logger->level++; \
-        LOG(info, "{{{ " << message); \
-    }
-#define FFOT_LOG_FOLD_END(info, message) \
-    { \
-        LOG(info, message << " }}}" << std::endl); \
-        info.logger->level--; \
-    }
-#define FFOT_LOG_FOLD(info, message) \
-    { \
-        info.logger->level++; \
-        LOG(info, "{{{ " << message << " }}}" << std::endl); \
-        info.logger->level--; \
-    }
-#define FFOT_LOG_ON(info)  { info.logger->on = true; }
-#define FFOT_LOG_OFF(info) { info.logger->on = false; }
-
-#endif
-
-#define FFOT_TOL 0.000001
-
-namespace optimizationtools
-{
-
 /**
- * Structure passed as argument of optimization algorithms which simplifies
- * several aspects of the implementation.
+ * This package provides a structure to pass as argument of optimization
+ * algorithms which simplifies several aspects of the implementation.
  *
  * It is designed such that the user can use a default value:
  *     algorithm(Instance instance, Info info = Info());
@@ -86,36 +13,39 @@ namespace optimizationtools
  *
  * Verbosity features:
  * - Enable verbosity:
- *     info.set_verbose(true);
- * - Write something on the standard output (thread safe):
- *     VER(info, "Print " << message);
+ *     info.set_verbosity_leve(1);
+ * - Write something on the standard output:
+ *     info.os() << "Print " << message;
  *
  * Certificate path features:
  * - Set the path of the certificate file:
  *     info.set_certificate_path("certificate_path");
  *
  * JSON output features:
+ * - The JSON features rely on the  nlohmann/json package.
+ * - They can be disabled by setting 'FFOT_USE_JSON' to '0', and thus, avoid
+ *   the dependency.
  * - Set the path of the JSON output file:
- *     info.set_json_output_path("json_output_path");
+ *     info.add_to_json_output_path("json_output_path");
  * - Write something in the JSON output file (thread safe):
- *     PUT(info, "category", "key", value);
+ *     info.add_to_json("category", "key", value);
  *
  * Logging features:
- * - When compiling with NODEBUG, loggin is disabled and no line related to the
- *   logging is kept in the final executable.
+ * - When compiling with NODEBUG, logging is disabled and no line related to
+ *   the logging is kept in the final executable.
  * - Set the path of the log file:
  *     info.set_log_path("log_path");
  * - Also write the log to the standard error output:
  *     info.set_log2stderr(true);
  * - Disable/enable logging (enabled by default):
- *     LOG_OFF(info);
- *     LOG_ON(info);
+ *     FFOT_LOG_OFF(info);
+ *     FFOT_LOG_ON(info);
  * - Write some logging information:
- *     LOG(info, "I want to log " << message << std::endl);
+ *     FFOT_LOG(info, "I want to log " << message << std::endl);
  * - Start a new fold:
- *     LOG_FOLD_START(info, "new fold" << std::endl);
+ *     FFOT_LOG_FOLD_START(info, "new fold" << std::endl);
  * - End the current fold:
- *     LOG_FOLD_END(info, "new fold");
+ *     FFOT_LOG_FOLD_END(info, "new fold");
  *
  * Time limit features:
  * - Set the time limit (in seconds) of the algorithm:
@@ -144,30 +74,137 @@ void update_solution(
         const Solution& new_solution,
         optimizationtools::Info& info)
 {
-    info.output->mutex_solutions.lock();
+    info.lock();
 
     if (incumbent_solution is worse than new_solution) {
         incumbent_solution = new_solution;
 
         info.output->number_of_solutions++;
         double t = round(info.elapsed_time() * 10000) / 10000;
-        VER(info,
-                "Time: " << t
+        info.os()
+                << "Time: " << t
                 << "; New solution with value: " << incumbent_solution.value()
                 << std::endl);
         std::string sol_str = "Solution" + std::to_string(info.output->number_of_solutions);
-        PUT(info, sol_str, "Value", incumbent_solution.value());
-        PUT(info, sol_str, "Time", t);
+        info.add_to_json(sol_str, "Value", incumbent_solution.value());
+        info.add_to_json(sol_str, "Time", t);
         if (!info.output->only_write_at_the_end) {
             info.write_json_output();
             solution.write(info.output->certificate_path);
         }
     }
 
-    info.output->mutex_solutions.unlock();
+    info.unlock();
 }
 
- */
+*/
+
+#pragma once
+
+#define FFOT_USE_JSON 1
+
+#define FFOT_COMMA ,
+
+#ifdef NDEBUG
+
+#define FFOT_DBG(x)
+#define FFOT_LOG(info, message) {  }
+#define FFOT_LOG_FOLD_START(info, message) {  }
+#define FFOT_LOG_FOLD_END(info, message) {  }
+#define FFOT_LOG_FOLD(info, message) {  }
+#define FFOT_LOG_ON(info) {  }
+#define FFOT_LOG_OFF(info) {  }
+
+#else
+
+#define FFOT_DBG(x) x
+#define FFOT_LOG(info, message) \
+    { \
+        if (info.logger->on && info.logger->level <= info.logger->maximum_log_level) { \
+            if (info.logger->log_file.is_open()) \
+                info.logger->log_file << message; \
+            if (info.logger->log2stderr) \
+                std::cerr << message; \
+        } \
+    }
+#define FFOT_LOG_FOLD_START(info, message) \
+    { \
+        info.logger->level++; \
+        FFOT_LOG(info, "{{{ " << message); \
+    }
+#define FFOT_LOG_FOLD_END(info, message) \
+    { \
+        FFOT_LOG(info, message << " }}}" << std::endl); \
+        info.logger->level--; \
+    }
+#define FFOT_LOG_FOLD(info, message) \
+    { \
+        info.logger->level++; \
+        FFOT_LOG(info, "{{{ " << message << " }}}" << std::endl); \
+        info.logger->level--; \
+    }
+#define FFOT_LOG_ON(info)  { info.logger->on = true; }
+#define FFOT_LOG_OFF(info) { info.logger->on = false; }
+
+#endif
+
+#define FFOT_TOL 0.000001
+
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <mutex>
+#include <iomanip>
+#include <memory>
+
+#if FFOT_USE_JSON == 1
+#include <nlohmann/json.hpp>
+#endif
+
+namespace optimizationtools
+{
+
+class OutputStream: public std::ostream
+{
+    struct ComposeBuffer: public std::streambuf
+    {
+        void addBuffer(std::streambuf* buf)
+        {
+            bufs.push_back(buf);
+        }
+
+        virtual int overflow(int c)
+        {
+            std::for_each(
+                    bufs.begin(),
+                    bufs.end(),
+                    std::bind2nd(std::mem_fun(&std::streambuf::sputc), c));
+            return c;
+        }
+
+        std::vector<std::streambuf*> bufs;
+    };
+
+public:
+
+    OutputStream():
+        std::ostream(NULL)
+    {
+        std::ostream::rdbuf(&buffer);
+    }
+
+    void link_stream(std::ostream& out)
+    {
+        out.flush();
+        buffer.addBuffer(out.rdbuf());
+    }
+
+private:
+
+    ComposeBuffer buffer;
+
+};
+
 struct Info
 {
 
@@ -200,22 +237,22 @@ public:
      */
     struct Output
     {
+        /** Output stream. */
+        OutputStream os;
+#if FFOT_USE_JSON == 1
         /** JSON output file. */
-        nlohmann::json j;
+        nlohmann::json json;
+#endif
+        /** Verbose level. */
+        int verbosity_level = 0;
         /** Only write outputs at the end of the algorithm. */
         bool only_write_at_the_end = true;
         /** Path to the JSON output file. */
         std::string json_output_path  = "";
         /** Path to the certificate file. */
         std::string certificate_path = "";
-        /** Mutex to access the JSON output. */
-        std::mutex mutex_json;
-        /** Mutex to access the standard output. */
-        std::mutex mutex_cout;
-        /** Mutex to manipulate solutions. */
-        std::mutex mutex_solutions;
-        /** Verbosity. */
-        bool verbose = false;
+        /** Mutex. */
+        std::mutex mutex;
         /** Counter for the number of solutions. */
         int number_of_solutions = 0;
         /** Counter for the number of bounds. */
@@ -245,13 +282,31 @@ public:
      */
     Info(const Info& info, bool keep_output, std::string keep_logger);
 
+    /*
+     * Getters.
+     */
+
+    /** Get output stream. */
+    OutputStream& os() { return output->os; }
+
+    /** Get verbosity level. */
+    int verbosity_level() const { return output->verbosity_level; }
 
     /*
-     * Set options.
+     * Setters.
      */
 
     /** Enable verbosity. */
-    Info& set_verbose(bool verbose) { output->verbose = verbose; return *this; }
+    Info& set_verbosity_level(int verbosity_level)
+    {
+        if (verbosity_level > 0) {
+            output->os.clear();
+        } else {
+            output->os.setstate(std::ios_base::failbit);
+        }
+        output->verbosity_level = verbosity_level;
+        return *this;
+    }
 
     /** Set JSON output path. */
     Info& set_json_output_path(std::string outputfile) { output->json_output_path = outputfile; return *this; }
@@ -276,6 +331,20 @@ public:
 
     /** Set SIGINT handler. */
     Info& set_sigint_handler();
+
+    template<typename T1, typename T2, typename T3>
+    void add_to_json(T1 category, T2 key, T3 value)
+    {
+#if FFOT_USE_JSON == 1
+        output->json[category][key] = value;
+#endif
+    }
+
+    /** Lock mutex. */
+    void lock() { output->mutex.lock(); }
+
+    /** Unlock mutex. */
+    void unlock() { output->mutex.unlock(); }
 
     /*
      * Time.

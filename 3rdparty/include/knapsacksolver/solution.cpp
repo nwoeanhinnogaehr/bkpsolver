@@ -5,15 +5,14 @@
 using namespace knapsacksolver;
 
 Solution::Solution(const Instance& instance):
-    instance_(instance),
+    instance_(&instance),
     x_(instance.number_of_items(), 0)
 { }
 
 Solution::Solution(
         const Instance& instance,
         std::string certificate_path):
-    instance_(instance),
-    x_(instance.number_of_items(), 0)
+    Solution(instance)
 {
     if (certificate_path.empty())
         return;
@@ -30,35 +29,17 @@ Solution::Solution(
     }
 }
 
-Solution::Solution(const Solution& solution):
-    instance_(solution.instance_),
-    number_of_items_(solution.number_of_items_),
-    profit_(solution.profit_),
-    weight_(solution.weight_),
-    x_(solution.x_)
-{ }
-
-Solution& Solution::operator=(const Solution& solution)
+void Solution::update(const Solution& solution)
 {
-    if (this != &solution) {
-        if (&this->instance() == &solution.instance()) {
-            number_of_items_ = solution.number_of_items_;
-            profit_ = solution.profit_;
-            weight_ = solution.weight_;
-            x_ = solution.x_;
-        } else {
-            // Used to convert a solution of a surrogate instance to a
-            // solution of its original instance.
-            number_of_items_ = solution.number_of_items_;
-            x_ = solution.x_;
-            profit_ = solution.profit_;
-            weight_ = 0;
-            for (ItemPos j = 0; j < instance().number_of_items(); ++j)
-                if (contains(j))
-                    weight_ += instance().item(j).w;
-        }
-    }
-    return *this;
+    // Used to convert a solution of a surrogate instance to a
+    // solution of its original instance.
+    number_of_items_ = solution.number_of_items_;
+    x_ = solution.x_;
+    profit_ = solution.profit_;
+    weight_ = 0;
+    for (ItemPos j = 0; j < instance().number_of_items(); ++j)
+        if (contains(j))
+            weight_ += instance().item(j).w;
 }
 
 int Solution::contains(ItemPos j) const
@@ -159,8 +140,8 @@ std::string Solution::to_string_items() const
 Output::Output(const Instance& instance, Info& info): solution(instance)
 {
     info.reset_time();
-    FFOT_VER(info,
-               std::setw(10) << "T (ms)"
+    info.os()
+            << std::setw(10) << "T (ms)"
             << std::setw(15) << "LB"
             << std::setw(15) << "UB"
             << std::setw(10) << "GAP"
@@ -171,7 +152,7 @@ Output::Output(const Instance& instance, Info& info): solution(instance)
             << std::setw(15) << "--"
             << std::setw(10) << "---"
             << std::setw(24) << "-------"
-            << std::endl);
+            << std::endl;
     print(info, std::stringstream(""));
 }
 
@@ -181,12 +162,12 @@ void Output::print(Info& info, const std::stringstream& s) const
     std::string gap_str = (upper_bound == -1)? "inf": std::to_string(upper_bound - lower_bound);
     double t = round(info.elapsed_time() * 10000) / 10;
 
-    FFOT_VER(info,
-               std::setw(10) << t
+    info.os()
+            << std::setw(10) << t
             << std::setw(15) << lower_bound
             << std::setw(15) << ub_str
             << std::setw(10) << gap_str
-            << std::setw(24) << s.str() << std::endl);
+            << std::setw(24) << s.str() << std::endl;
 
     if (!info.output->only_write_at_the_end)
         info.write_json_output();
@@ -200,7 +181,7 @@ void Output::update_lower_bound(
     if (lower_bound >= lower_bound_new)
         return;
 
-    info.output->mutex_solutions.lock();
+    info.lock();
 
     if (lower_bound < lower_bound_new) {
         lower_bound = lower_bound_new;
@@ -209,13 +190,13 @@ void Output::update_lower_bound(
         info.output->number_of_solutions++;
         double t = round(info.elapsed_time() * 10000) / 10;
         std::string sol_str = "Solution" + std::to_string(info.output->number_of_solutions);
-        FFOT_PUT(info, sol_str, "Cost", lower_bound);
-        FFOT_PUT(info, sol_str, "Time", t);
+        info.add_to_json(sol_str, "Cost", lower_bound);
+        info.add_to_json(sol_str, "Time", t);
         if (!info.output->only_write_at_the_end)
             solution.write(info.output->certificate_path);
     }
 
-    info.output->mutex_solutions.unlock();
+    info.unlock();
 }
 
 void Output::update_solution(
@@ -227,7 +208,11 @@ void Output::update_solution(
             || solution.profit() >= solution_new.profit())
         return;
 
-    info.output->mutex_solutions.lock();
+    info.lock();
+
+    if (&solution_new.instance() != &solution.instance()) {
+        throw std::runtime_error("update_solution");
+    }
 
     if (solution.profit() < solution_new.profit()) {
         solution = solution_new;
@@ -240,13 +225,13 @@ void Output::update_solution(
         info.output->number_of_solutions++;
         double t = round(info.elapsed_time() * 10000) / 10;
         std::string sol_str = "Solution" + std::to_string(info.output->number_of_solutions);
-        FFOT_PUT(info, sol_str, "Cost", lower_bound);
-        FFOT_PUT(info, sol_str, "Time", t);
+        info.add_to_json(sol_str, "Cost", lower_bound);
+        info.add_to_json(sol_str, "Time", t);
         if (!info.output->only_write_at_the_end)
             solution.write(info.output->certificate_path);
     }
 
-    info.output->mutex_solutions.unlock();
+    info.unlock();
 }
 
 void Output::update_upper_bound(
@@ -257,7 +242,7 @@ void Output::update_upper_bound(
     if (upper_bound != -1 && upper_bound <= upper_bound_new)
         return;
 
-    info.output->mutex_solutions.lock();
+    info.lock();
 
     if (upper_bound == -1 || upper_bound > upper_bound_new) {
         upper_bound = upper_bound_new;
@@ -266,13 +251,13 @@ void Output::update_upper_bound(
         info.output->number_of_bounds++;
         double t = round(info.elapsed_time() * 10000) / 10;
         std::string sol_str = "Bound" + std::to_string(info.output->number_of_bounds);
-        FFOT_PUT(info, sol_str, "Cost", upper_bound);
-        FFOT_PUT(info, sol_str, "Time", t);
+        info.add_to_json(sol_str, "Cost", upper_bound);
+        info.add_to_json(sol_str, "Time", t);
         if (!info.output->only_write_at_the_end)
             solution.write(info.output->certificate_path);
     }
 
-    info.output->mutex_solutions.unlock();
+    info.unlock();
 }
 
 Output& Output::algorithm_end(Info& info)
@@ -280,16 +265,16 @@ Output& Output::algorithm_end(Info& info)
     double t = round(info.elapsed_time() * 10000) / 10;
     std::string ub_str = (upper_bound == -1)? "inf": std::to_string(upper_bound);
     std::string gap_str = (upper_bound == -1)? "inf": std::to_string(upper_bound - lower_bound);
-    std::string sol_str = (solution.feasible() && solution.profit() == lower_bound)? "OK": "none";
+    std::string sol_str = (solution.feasible() && solution.profit() == lower_bound)? "1": "0";
     double gap = (lower_bound == 0 || upper_bound == -1)?
         std::numeric_limits<double>::infinity():
         (double)(10000 * (upper_bound - lower_bound) / lower_bound) / 100;
-    FFOT_PUT(info, "Solution", "Value", lower_bound);
-    FFOT_PUT(info, "Bound", "Value", upper_bound);
-    FFOT_PUT(info, "Solution", "Time", t);
-    FFOT_PUT(info, "Bound", "Time", t);
-    FFOT_VER(info,
-            std::endl
+    info.add_to_json("Solution", "Value", lower_bound);
+    info.add_to_json("Solution", "Time", t);
+    info.add_to_json("Bound", "Value", upper_bound);
+    info.add_to_json("Bound", "Time", t);
+    info.os()
+            << std::endl
             << "Final statistics" << std::endl
             << "----------------" << std::endl
             << "Value:                      " << lower_bound << std::endl
@@ -297,7 +282,9 @@ Output& Output::algorithm_end(Info& info)
             << "Gap:                        " << gap_str << std::endl
             << "Gap (%):                    " << gap << std::endl
             << "Solution:                   " << sol_str << std::endl
-            << "Time (ms):                  " << t << std::endl);
+            << "Number of items:            " << solution.number_of_items() << " / " << solution.instance().number_of_items() << " (" << (double)solution.number_of_items() / solution.instance().number_of_items() * 100 << "%)" << std::endl
+            << "Weight:                     " << solution.weight() << " / " << solution.instance().capacity() << " (" << (double)solution.weight() / solution.instance().capacity() * 100 << "%)" << std::endl
+            << "Time (ms):                  " << t << std::endl;
 
     info.write_json_output();
     solution.write(info.output->certificate_path);
@@ -307,14 +294,14 @@ Output& Output::algorithm_end(Info& info)
 Profit knapsacksolver::algorithm_end(Profit upper_bound, Info& info)
 {
     double t = round(info.elapsed_time() * 10000) / 10;
-    FFOT_PUT(info, "Bound", "Value", upper_bound);
-    FFOT_PUT(info, "Bound", "Time", t);
-    FFOT_VER(info,
-            std::endl
+    info.add_to_json("Bound", "Value", upper_bound);
+    info.add_to_json("Bound", "Time", t);
+    info.os()
+            << std::endl
             << "Final statistics" << std::endl
             << "----------------" << std::endl
             << "Bound:                      " << upper_bound << std::endl
-            << "Time (ms):                  " << t << std::endl);
+            << "Time (ms):                  " << t << std::endl;
 
     info.write_json_output();
     return upper_bound;

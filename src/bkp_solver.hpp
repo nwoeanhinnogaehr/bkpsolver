@@ -3,7 +3,7 @@
 #include "bkp_instance.hpp"
 
 #include "knapsacksolver/solution.hpp"
-#include "knapsacksolver/algorithms/minknap.hpp"
+#include "knapsacksolver/algorithms/algorithms.hpp"
 #include <gurobi_c++.h>
 
 #include <vector>
@@ -48,9 +48,9 @@ int BKPSolver<P>::solve_knapsack(size_t n, std::vector<int> pft, std::vector<int
     kinst.set_capacity(cap);
     for (size_t i = 0; i < n; i++)
         kinst.add_item(weight[i], pft[i]);
-    knapsacksolver::MinknapOptionalParameters param;
+    knapsacksolver::DynamicProgrammingPrimalDualOptionalParameters param;
     param.set_combo();
-    return knapsacksolver::minknap(kinst, param).solution.profit();
+    return knapsacksolver::dynamic_programming_primal_dual(kinst, param).solution.profit();
 }
 template<typename P>
 void BKPSolver<P>::sort_inst() {

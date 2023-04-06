@@ -3,7 +3,7 @@
 #include "dcs_solver.hpp"
 
 #include "knapsacksolver/solution.hpp"
-#include "knapsacksolver/algorithms/minknap.hpp"
+#include "knapsacksolver/algorithms/algorithms.hpp"
 #include <gurobi_c++.h>
 
 #include <vector>
@@ -199,9 +199,9 @@ void DCS_BKPSolver::optimize_lower_level(BKPSolution<max_pft_t>& sol) {
         else
             finst.add_item(inst.lo_wt[i], 0);
     }
-    knapsacksolver::MinknapOptionalParameters param;
+    knapsacksolver::DynamicProgrammingPrimalDualOptionalParameters param;
     param.set_combo();
-    auto foutput = knapsacksolver::minknap(finst, param);
+    auto foutput = knapsacksolver::dynamic_programming_primal_dual(finst, param);
     auto fsol = foutput.solution;
     for (int i = 0; i < inst.n; i++) {
         if (sol.up_sol[i]) sol.lo_sol[i] = 0;

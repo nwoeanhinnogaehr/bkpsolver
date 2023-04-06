@@ -24,15 +24,15 @@ int main(int argc, char *argv[])
     //std::cout << ins << std::endl;
 
     Info info = Info()
-        .set_verbose(true)
+        .set_verbosity_level(1)
         //.set_log2stderr(true)
         //.set_logfile("log.txt")
         ;
 
-    MinknapOptionalParameters p;
+    DynamicProgrammingPrimalDualOptionalParameters p;
     p.info = info;
     p.set_combo();
-    auto output = minknap(ins, p);
+    auto output = dynamic_programming_primal_dual(ins, p);
 
 }
 

@@ -8,7 +8,15 @@ Preprint: https://optimization-online.org/2022/10/a-fast-combinatorial-algorithm
 
 This code has only been tested on Linux. First, you will want to clone this repo.
 The dependenceies are CMake, Gurobi, and [Knapsack Solver](https://github.com/fontanf/knapsacksolver).
-CMake should be available from your distribution's package manager. Gurobi can be installed in any way you like, as long as `$GUROBI_HOME` is set appropriately. To install the knapsack solver, simply follow the build instructions from the [repo](https://github.com/fontanf/knapsacksolver), and then copy the built libraries into the `3rdparty/lib/` directory of this repo (overwriting the binaries that are there). If you run into linker issues, you may also need to copy the knapsacksolver header files into `3rdparty/include/knapsacksolver/`.
+CMake should be available from your distribution's package manager. Gurobi can be installed in any way you like, as long as `$GUROBI_HOME` is set appropriately. To install the knapsack solver, follow the build instructions from the [repo](https://github.com/fontanf/knapsacksolver), and then copy the following files libraries into the `3rdparty/lib/` directory of this repo (overwriting the binaries that are there):
+- bazel-bin/knapsacksolver/libknapsacksolver.so
+- bazel-bin/knapsacksolver/algorithms/libdynamic_programming_primal_dual.so
+- bazel-bin/knapsacksolver/algorithms/libgreedy.so
+- bazel-bin/knapsacksolver/algorithms/libsurrogate_relaxation.so
+- bazel-bin/knapsacksolver/algorithms/libupper_bound_dantzig.so
+- bazel-bin/external/optimizationtools/optimizationtools/utils/libinfo.so
+
+The code was tested to work with commit 5464348be438e0b339f30c5f4f72cdaf701c99ec of knapsacksolver. Newer versions may work as well, but you may also need to copy the knapsacksolver header files into `3rdparty/include/knapsacksolver/` or fix the code accordingly for any changes made in knapsacksolver.
 
 Now, create a build directory in the root of this repo:
 
@@ -55,8 +63,15 @@ OPTIONS
 ```
 
 There is also a simple testing script included called `run_tests.py`, which can be used to solve many
-instances and record timing information into a CSV file. To use the script, you can edit the code at
-the bottom of the file to use the desired solvers, tests, and CSV file.
+instances and record timing information into a JSON file. To use the script, you can edit the code at
+the bottom of the file to use the desired solvers, tests, and JSON file.
+
+## Troubleshooting Gurobi
+Bkpsolver currently targets Gurobi 10.0 and is not guaranteed to work with any other version. If you
+recieve the error message
+```terminate called after throwing an instance of 'GRBException'```
+then your Gurobi licence file may be invalid or expired. Note that with an academic license you need
+to reactivate Gurobi every year or whenever you upgrade to a new major version.
 
 # Instance format
 The instances are simple text files with extension `.ki`, in the following format. The file contains at least 6 lines.

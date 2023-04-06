@@ -21,7 +21,5 @@ add_executable(bkpsolver
    src/dcs_solver.cpp
    src/main.cpp)
 target_link_libraries(bkpsolver knapsacksolver info greedy upper_bound_dantzig surrogate_relaxation dynamic_programming_primal_dual)
-target_link_libraries(bkpsolver gurobi_g++5.2)
-target_link_libraries(bkpsolver ${GUROBI_CXX_LIBRARY})
-target_link_libraries(bkpsolver ${GUROBI_LIBRARY})
+target_link_libraries(bkpsolver gurobi_g++5.2 ${GUROBI_LIBRARY} ${GUROBI_CXX_LIBRARY})
 target_link_libraries(bkpsolver OpenMP::OpenMP_CXX)

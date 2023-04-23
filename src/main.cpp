@@ -8,8 +8,9 @@ using namespace clipp;
 
 int main(int argc, char **argv) {
     int alpha = 2, beta = 2, delta = 30, mu = 250, gamma = 5, omega = 3;
-    int lookback = 1;
-    bool quiet, use_file, best_prefix = false, weak_lb = false, lb_only = false;
+    int lookback = 0;
+    bool quiet, use_file, best_prefix = false, lb_only = false;
+    double density_threshold = 0.02, prefix_density_threshold = 0.02;
     int num_threads = 4;
     string filename;
     enum class mode {dcs, comb};
@@ -25,12 +26,13 @@ int main(int argc, char **argv) {
                 option("-o") & integer("omega=3", omega) ) |
         command("comb").set(selected, mode::comb)
             % "use combinatorial algorithm"
-            & ( option("-l") & integer("lookback=1", lookback),
+            & ( (option("-l") & integer("lookback=0", lookback)) % "try deleting items up to this far back from the end of the greedy lower solution",
                 option("-p").set(best_prefix) % "search for best prefix (try this if number of leaves is large)",
-                option("-w").set(weak_lb),
-                option("-lb-only").set(lb_only) ),
+                (option("-dt") & number("density_threshold=0.02", density_threshold)) % "density threshold for switching to dense DP table",
+                (option("-pdt") & number("prefix_density_threshold=0.02", prefix_density_threshold)) % "density threshold for switching to dense prefix DP table",
+                option("-lb-only").set(lb_only) % "compute lower bound only"),
         option("-q").set(quiet) % "quiet mode: do not log to stderr",
-        option("-j") & integer("num_threads=4", num_threads),
+        (option("-j") & integer("num_threads=4", num_threads)) % "number of threads to use for multithreaded code",
         opt_value("file", filename).set(use_file) % "filename (will read from stdin if absent)"
     );
     if(!parse(argc, argv, cli)) {
@@ -44,8 +46,9 @@ int main(int argc, char **argv) {
     if (selected == mode::comb) {
         cout << "lookback " << lookback << endl;
         cout << "best_prefix " << best_prefix << endl;
-        cout << "weak_lb " << weak_lb << endl;
         cout << "lb_only " << lb_only << endl;
+        cout << "density_threshold " << density_threshold << endl;
+        cout << "prefix_density_threshold " << prefix_density_threshold << endl;
     } else {
         cout << "alpha " << alpha << endl;
         cout << "beta " << beta << endl;
@@ -64,16 +67,18 @@ int main(int argc, char **argv) {
     comb_solver_16.lookback = lookback;
     comb_solver_16.best_prefix = best_prefix;
     comb_solver_16.num_threads = num_threads;
-    comb_solver_16.weak_lb = weak_lb;
     comb_solver_16.lb_only = lb_only;
+    comb_solver_16.density_threshold = density_threshold;
+    comb_solver_16.prefix_density_threshold = prefix_density_threshold;
 
     Comb_BKPSolver<uint32_t> comb_solver_32(inst);
     comb_solver_32.log = !quiet;
     comb_solver_32.lookback = lookback;
     comb_solver_32.best_prefix = best_prefix;
     comb_solver_32.num_threads = num_threads;
-    comb_solver_32.weak_lb = weak_lb;
     comb_solver_32.lb_only = lb_only;
+    comb_solver_32.density_threshold = density_threshold;
+    comb_solver_32.prefix_density_threshold = prefix_density_threshold;
 
     DCS_BKPSolver dcs_solver(inst);
     dcs_solver.log = !quiet;

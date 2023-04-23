@@ -25,7 +25,7 @@ struct BKPSolution {
 template<typename P>
 class BKPSolver {
 public:
-    BKPSolver(BKPInstance inst) : inst(inst) { }
+    BKPSolver(BKPInstance inst) : inst(inst), log(true) { }
     virtual ~BKPSolver() {}
     virtual BKPSolution<P> solve() = 0;
 

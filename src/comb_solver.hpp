@@ -35,14 +35,14 @@ public:
 
 private:
     // sparse tables
-    struct LowerTableEntry {
+    struct __attribute__((packed)) LowerTableEntry {
         int wt;
         P pft;
         bool operator==(const LowerTableEntry& other) {
             return wt == other.wt && pft == other.pft;
         }
     };
-    struct UpperTableEntry {
+    struct __attribute__((packed)) UpperTableEntry {
         int wt;
         std::vector<LowerTableEntry> L;
     };

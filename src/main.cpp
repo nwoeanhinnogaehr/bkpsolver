@@ -122,6 +122,8 @@ int main(int argc, char **argv) {
             lower_util += sol.lo_sol[i] * inst.lo_wt[i];
         }
         cout << endl;
+        ASSERT(lower_util <= inst.lo_cap);
+        ASSERT(upper_util <= inst.up_cap);
         cout << "up_util " << upper_util << endl;
         cout << "lo_util " << lower_util << endl;
         cout << "profit ";

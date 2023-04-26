@@ -114,7 +114,9 @@ BKPSolution<P> Comb_BKPSolver<P>::solve() {
         if (initial_ub.pft <= lb) {
             if (log) std::cerr << "done, returning early" << std::endl;
             std::cout << "total_time " << duration<double, std::milli>(initial_bound_end_time - init_time).count() << std::endl;
-            return initial_ub;
+            ub = initial_ub;
+            BKPSolver<P>::unsort_sol(ub);
+            return ub;
         }
         ub = initial_ub;
     }

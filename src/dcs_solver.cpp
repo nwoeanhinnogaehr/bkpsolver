@@ -28,8 +28,8 @@ BKPSolution<max_pft_t> DCS_BKPSolver::solve() {
     BKPSolution<max_pft_t> ub(inst.n);
     NCR(ub);
     if (log) cerr << "computing initial lower bounds..." << endl;
-    clb = find_crit_lb();
-    cub = min(int(inst.n)-1, find_crit_ub());
+    clb = find_crit_lb(inst);
+    cub = min(int(inst.n)-1, find_crit_ub(inst));
     tuples.resize(inst.n);
     vector<double> lp_vals;
     for (int c = clb; c <= cub; c++) {

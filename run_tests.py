@@ -154,13 +154,13 @@ class Test:
         for l in lines[6:]:
             if len(l.strip()) == 0:
                 continue
-            key, val = l.strip().split()
+            key, *val = l.strip().split()
             if key == "group":
-                self.group = val
+                self.group = val[0]
             if key == "class":
-                self.cls = val
+                self.cls = val[0]
             if key == "ins":
-                self.ins = val
+                self.ins = val[0]
 
     def __str__(self):
         return "{} {} {} {} {} {} {}\n".format(self.filename, self.n, self.lo_cap, self.up_cap, self.group, self.cls, self.ins)
@@ -177,20 +177,22 @@ def get_all_tests():
 output_dir = "test_results"
 all_solvers = [
     Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j1"], EXACT),
-    #Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j4"], EXACT),
-    #Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j16"], EXACT),
+    Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j4"], EXACT),
+    Solver("build/bkpsolver", ["comb", "-l0", "-p", "-q", "-j16"], EXACT),
     #Solver("build/bkpsolver", ["dcs", "-a2", "-b2", "-g5", "-d20", "-m1000", "-o5", "-q"], EXACT)
 ]
 
 tests = get_all_tests()
 new_tests = list(filter(lambda t: t.group in ["New"], tests))
 correctness_tests = list(filter(lambda t: t.group in [None], tests))
-lit_tests = list(filter(lambda t: t.group in ["CCLW", "DCS", "FMS", "TRS", "DeNegre"], tests))
+lit_tests = list(filter(lambda t: t.group in ["CCLW", "FCS", "FMS", "TRS", "DeNegre"], tests))
 largecap_tests = list(filter(lambda t: t.group in ["LargeCap"], tests))
+count_tests = list(filter(lambda t: t.group in ["Count"], tests))
 os.makedirs(output_dir, exist_ok=True)
 with open(output_dir + "/all_results", "a") as f:
     run_tests(all_solvers, lit_tests, f, timeout=3600)
     run_tests(all_solvers, correctness_tests, f, timeout=900)
     run_tests(all_solvers, new_tests, f, timeout=900)
     run_tests(all_solvers, largecap_tests, f, timeout=900)
+    run_tests(all_solvers, count_tests, f, timeout=900)
 

@@ -31,6 +31,7 @@ public:
     int num_threads = 4;
     bool lb_only = false;
     double density_threshold = 0.02, prefix_density_threshold = 0.02;
+    bool do_dedup = true;
     using BKPSolver<P>::log;
 
 private:
@@ -63,10 +64,12 @@ private:
     double dcs_lb();
     double dcs_lb(int c);
     void dump_lower_bound();
+    void deduplicate_instance();
+    BKPSolution<P> reduplicate_sol(BKPSolution<P> &sol);
 
     GRBEnv grb_env;
     BKPSolution<P> ub;
-    std::vector<uint8_t> cur_up_sol;
+    std::vector<int> cur_up_sol;
     std::vector<size_t> lo_greedy_items;
     int n_not_interdicted = 0;
     std::vector<int> min_upper, min_lower;
@@ -74,6 +77,7 @@ private:
     std::chrono::system_clock::time_point opt_time;
 
     using BKPSolver<P>::inst;
+    BKPInstance inst_exp;
 
     // sparse tables
     std::vector<std::vector<UpperTableEntry>> s_tab;
@@ -101,6 +105,31 @@ BKPSolution<P> Comb_BKPSolver<P>::solve() {
 
     BKPSolver<P>::sort_inst();
 
+    // deduplicate the items
+    // kind of a mess, but it works...
+    bool using_item_counts = 0;
+    for (int i = 0; i < inst.n; i++)
+        if (inst.cnt[i] > 1) {
+            using_item_counts = 1;
+            break;
+        }
+    if (!using_item_counts && do_dedup)
+        deduplicate_instance();
+    bool did_dedup = 0;
+    if (!using_item_counts)
+        for (int i = 0; i < inst.n; i++)
+            if (inst.cnt[i] > 1) {
+                did_dedup = 1;
+                break;
+            }
+
+    if (density_threshold > 0 || prefix_density_threshold > 0)
+        if (using_item_counts || did_dedup) {
+            if (log) std::cerr << "WARNING: using sparse tables along with item counts is not currently supported; using dense tables instead" << std::endl;
+            density_threshold = 0;
+            prefix_density_threshold = 0;
+        }
+            
     if (!lb_only) {
         if (log) std::cerr << "initial bound test... " << std::endl;
         BKPSolution<max_pft_t> initial_ub = greedy_ub();
@@ -115,6 +144,8 @@ BKPSolution<P> Comb_BKPSolver<P>::solve() {
             if (log) std::cerr << "done, returning early" << std::endl;
             std::cout << "total_time " << duration<double, std::milli>(initial_bound_end_time - init_time).count() << std::endl;
             ub = initial_ub;
+            if (did_dedup)
+                ub = reduplicate_sol(ub);
             BKPSolver<P>::unsort_sol(ub);
             return ub;
         }
@@ -126,7 +157,10 @@ BKPSolution<P> Comb_BKPSolver<P>::solve() {
     is_sparse.resize(inst.n);
     s_tab.reserve(inst.n+1);
     init_capacity_bounds();
-    compute_lower_bound_sparse();
+    if (density_threshold > 0)
+        compute_lower_bound_sparse();
+    else
+        compute_lower_bound_dense(inst.n-1);
     // dump_lower_bound();
     if (lb_only) {
         ub.pft = lower_bound(0, inst.up_cap, inst.lo_cap);
@@ -138,14 +172,19 @@ BKPSolution<P> Comb_BKPSolver<P>::solve() {
 
     opt_time = lb_end_time;
     if (log) std::cerr << "starting search... " << std::endl;
-    cur_up_sol.resize(inst.n+1);
+    cur_up_sol.resize(inst.n);
     fill(cur_up_sol.begin(), cur_up_sol.end(), 1);
-    pre_is_sparse.push_back(1); // start out sparse
+    if (prefix_density_threshold > 0)
+        pre_is_sparse.push_back(1); // start out sparse
+    else
+        pre_is_sparse.push_back(0); // start out dense
     d_pre_tab_idx = 0;
     solve_rec(0, inst.up_cap, inst.lo_cap, 0);
     std::cout << "nodes " << nodes << std::endl;
     std::cout << "leaves " << leaves << std::endl;
 
+    if (did_dedup)
+        ub = reduplicate_sol(ub);
     BKPSolver<P>::unsort_sol(ub);
 
     auto bnb_end_time = high_resolution_clock::now();
@@ -198,22 +237,19 @@ void Comb_BKPSolver<P>::solve_rec(size_t i, int up_cap, int lo_cap, int pft) {
     if (lower_bound_test(i, up_cap, lo_cap, pft))
         return;
 
-    // try taking the item at the upper level
-    if (inst.up_wt[i] <= up_cap)
-        solve_rec(i+1, up_cap-inst.up_wt[i], lo_cap, pft);
-
-    cur_up_sol[i] = 0;
-    n_not_interdicted++;
-    if (inst.lo_wt[i] <= lo_cap) {
-        lo_greedy_items.push_back(i);
-        // try taking the item at the lower level
-        solve_rec(i+1, up_cap, lo_cap-inst.lo_wt[i], pft+inst.pft[i]);
-        lo_greedy_items.pop_back();
+    for (int nu = inst.cnt[i]; nu >= 0; nu--) {
+        if (inst.up_wt[i]*nu > up_cap)
+            continue;
+        n_not_interdicted += nu != inst.cnt[i];
+        cur_up_sol[i] = nu;
+        int nl = std::min(inst.cnt[i]-nu, lo_cap/inst.lo_wt[i]);
+        for (int j = 0; j < nl; j++)
+            lo_greedy_items.push_back(i);
+        solve_rec(i+1, up_cap-inst.up_wt[i]*nu, lo_cap-inst.lo_wt[i]*nl, pft+inst.pft[i]*nl);
+        for (int j = 0; j < nl; j++)
+            lo_greedy_items.pop_back();
+        n_not_interdicted -= nu != inst.cnt[i];
     }
-    // try ignoring this item
-    else solve_rec(i+1, up_cap, lo_cap, pft);
-    cur_up_sol[i] = 1;
-    n_not_interdicted--;
 }
 
 template<typename P>
@@ -221,7 +257,7 @@ BKPSolution<P> Comb_BKPSolver<P>::solve_lower() {
     knapsacksolver::Instance finst;
     finst.set_capacity(inst.lo_cap);
     for (int i = 0; i < inst.n; i++)
-        if (!cur_up_sol[i])
+        for (int j = 0; j < inst.cnt[i] - cur_up_sol[i]; j++)
             finst.add_item(inst.lo_wt[i], inst.pft[i]);
     knapsacksolver::DynamicProgrammingPrimalDualOptionalParameters param;
     param.set_combo();
@@ -229,11 +265,11 @@ BKPSolution<P> Comb_BKPSolver<P>::solve_lower() {
     auto fsol = foutput.solution;
     BKPSolution<P> bkpsol(inst.n);
     bkpsol.pft = fsol.profit();
+    ASSERT(cur_up_sol.size() == inst.n);
     bkpsol.up_sol = cur_up_sol;
     for (int i = 0, j = 0; i < inst.n; i++)
-        if (!cur_up_sol[i]) {
-            if (fsol.contains_idx(j)) bkpsol.lo_sol[i] = 1;
-            else bkpsol.lo_sol[i] = 0;
+        for (int k = 0; k < inst.cnt[i] - cur_up_sol[i]; k++) {
+            if (fsol.contains_idx(j)) bkpsol.lo_sol[i]++;
             j++;
         }
     return bkpsol;
@@ -253,7 +289,7 @@ bool Comb_BKPSolver<P>::lower_bound_test(size_t i, int up_cap, int lo_cap, int p
     }
     if (best_prefix && i > 0) {
         // delete table rows which are from old branches of the search tree
-        while (s_pre_tab.size() + d_pre_tab_idx > n_not_interdicted - !cur_up_sol[i-1]) {
+        while (s_pre_tab.size() + d_pre_tab_idx > n_not_interdicted - (cur_up_sol[i-1] != inst.cnt[i-1])) {
             ASSERT(pre_is_sparse.size() >= 2);
             if (pre_is_sparse[pre_is_sparse.size()-2]) {
                 ASSERT(!s_pre_tab.empty());
@@ -266,11 +302,11 @@ bool Comb_BKPSolver<P>::lower_bound_test(size_t i, int up_cap, int lo_cap, int p
 
             // if we backtrack once after switching to dense, we could be left with an
             // uninitialized dense table. make sure this doesn't happen.
-            if (d_pre_tab_idx == 0)
+            if (prefix_density_threshold > 0 && d_pre_tab_idx == 0)
                 pre_is_sparse.back() = 1;
         }
 
-        if (cur_up_sol[i-1] == 0) { // if the previous item wasn't interdicted
+        if (cur_up_sol[i-1] != inst.cnt[i-1]) { // if the previous item wasn't interdicted
             if (pre_is_sparse.back()) {
                 if (s_pre_tab.empty()) {
                     // initialize the table with this first item
@@ -355,16 +391,23 @@ bool Comb_BKPSolver<P>::lower_bound_test(size_t i, int up_cap, int lo_cap, int p
                 P *knap = &d_pre_tab[++d_pre_tab_idx*(inst.lo_cap+1)];
                 if (d_pre_tab_idx == 1) { // initialize table
                     ASSERT(s_pre_tab.size() == 0); // we shouldn't have any table at all if we get here
-                    for (int k = 0; k < inst.lo_wt[i-1]; k++)
-                        knap[k] = 0;
-                    for (int k = inst.lo_wt[i-1]; k <= inst.lo_cap; k++)
-                        knap[k] = inst.pft[i-1];
+                    for (int k = 0; k <= inst.lo_cap; k++)
+                        knap[k] = inst.pft[i-1]*std::min(inst.cnt[i-1]-cur_up_sol[i-1], k/inst.lo_wt[i-1]);
                 } else { // update table
                     P *prev = &d_pre_tab[(d_pre_tab_idx-1)*(inst.lo_cap+1)];
-                    for (int k = 0; k < inst.lo_wt[i-1]; k++)
-                        knap[k] = prev[k];
-                    for (int k = inst.lo_wt[i-1]; k <= inst.lo_cap; k++)
-                        knap[k] = std::max(prev[k], P(prev[k-inst.lo_wt[i-1]]+inst.pft[i-1]));
+                    if (inst.cnt[i-1] == 1) { // code specialized for the 1-copy case
+                        for (int k = 0; k < inst.lo_wt[i-1]; k++)
+                            knap[k] = prev[k];
+                        for (int k = inst.lo_wt[i-1]; k <= inst.lo_cap; k++)
+                            knap[k] = std::max(prev[k], P(prev[k-inst.lo_wt[i-1]]+inst.pft[i-1]));
+                    } else { // if we can take multiple copies of this item
+                        for (int k = 0; k <= inst.lo_cap; k++) {
+                            P best = prev[k];
+                            for (int nl = 1; nl <= inst.cnt[i-1]-cur_up_sol[i-1] && inst.lo_wt[i-1]*nl <= k; nl++)
+                                best = std::max(best, P(prev[k-inst.lo_wt[i-1]*nl]+inst.pft[i-1]*nl));
+                            knap[k] = best;
+                        }
+                    }
                 }
                 pre_is_sparse.push_back(0); // continue with dense
             }
@@ -445,8 +488,8 @@ void Comb_BKPSolver<P>::init_capacity_bounds() {
     min_upper[0] = inst.up_cap;
     min_lower[0] = inst.lo_cap;
     for (size_t i = 1; i < inst.n; i++) {
-        min_upper[i] = std::max(0, min_upper[i-1] - inst.up_wt[i-1]);
-        min_lower[i] = std::max(0, min_lower[i-1] - inst.lo_wt[i-1]);
+        min_upper[i] = std::max(0, min_upper[i-1] - inst.up_wt[i-1]*inst.cnt[i-1]);
+        min_lower[i] = std::max(0, min_lower[i-1] - inst.lo_wt[i-1]*inst.cnt[i-1]);
     }
 }
 
@@ -650,33 +693,48 @@ void Comb_BKPSolver<P>::compute_lower_bound_dense(size_t start_at) {
     #pragma omp parallel
     for (int i = start_at; i >= 0; i--) {
         #pragma omp barrier
-        #pragma omp for nowait
-        for (int ru = std::max(min_upper[i], inst.up_wt[i]); ru <= inst.up_cap; ru++)
-            for (int rl = std::max(min_lower[i], inst.lo_wt[i]); rl <= inst.lo_cap; rl++)
-                d_tab_val(i, ru, rl) = std::min(d_tab_val(i+1, ru-inst.up_wt[i], rl),
-                        std::max(P(d_tab_val(i+1, ru, rl-inst.lo_wt[i])+inst.pft[i]),
-                            d_tab_val(i+1, ru, rl)));
-
-        if (min_lower[i] <= inst.lo_wt[i] && min_upper[i] <= inst.up_wt[i])
+        if (inst.cnt[i] > 1) { // if we can take multiple copies of this item
             #pragma omp for nowait
-            for (int ru = 0; ru < inst.up_wt[i]; ru++)
-                for (int rl = 0; rl < inst.lo_wt[i]; rl++)
-                    d_tab_val(i, ru, rl) = d_tab_val(i+1, ru, rl);
-
-        if (min_lower[i] <= inst.lo_wt[i])
+            for (int ru = min_upper[i]; ru <= inst.up_cap; ru++)
+                for (int rl = min_lower[i]; rl <= inst.lo_cap; rl++) {
+                    P bestu = (P)-1;
+                    for (int nu = 0; nu <= inst.cnt[i] && inst.up_wt[i]*nu <= ru; nu++) {
+                        P bestl = 0;
+                        for (int nl = 0; nl <= inst.cnt[i]-nu && inst.lo_wt[i]*nl <= rl; nl++)
+                            bestl = std::max(bestl, P(d_tab_val(i+1, ru-inst.up_wt[i]*nu,
+                                rl-inst.lo_wt[i]*nl) + inst.pft[i]*nl));
+                        bestu = std::min(bestu, bestl);
+                    }
+                    d_tab_val(i, ru, rl) = bestu;
+                }
+        } else { // code specialized for the 1 copy case
             #pragma omp for nowait
             for (int ru = std::max(min_upper[i], inst.up_wt[i]); ru <= inst.up_cap; ru++)
-                for (int rl = 0; rl < inst.lo_wt[i]; rl++)
-                    d_tab_val(i, ru, rl) = std::min(d_tab_val(i+1, ru-inst.up_wt[i], rl),
-                            d_tab_val(i+1, ru, rl));
-
-        if (min_upper[i] <= inst.up_wt[i])
-            #pragma omp for nowait
-            for (int ru = 0; ru < inst.up_wt[i]; ru++)
                 for (int rl = std::max(min_lower[i], inst.lo_wt[i]); rl <= inst.lo_cap; rl++)
-                    d_tab_val(i, ru, rl) = std::max(
-                            P(d_tab_val(i+1, ru, rl-inst.lo_wt[i])+inst.pft[i]),
-                            d_tab_val(i+1, ru, rl));
+                    d_tab_val(i, ru, rl) = std::min(d_tab_val(i+1, ru-inst.up_wt[i], rl),
+                            std::max(P(d_tab_val(i+1, ru, rl-inst.lo_wt[i])+inst.pft[i]),
+                                d_tab_val(i+1, ru, rl)));
+            if (min_lower[i] <= inst.lo_wt[i] && min_upper[i] <= inst.up_wt[i])
+                #pragma omp for nowait
+                for (int ru = 0; ru < inst.up_wt[i]; ru++)
+                    for (int rl = 0; rl < inst.lo_wt[i]; rl++)
+                        d_tab_val(i, ru, rl) = d_tab_val(i+1, ru, rl);
+
+            if (min_lower[i] <= inst.lo_wt[i])
+                #pragma omp for nowait
+                for (int ru = std::max(min_upper[i], inst.up_wt[i]); ru <= inst.up_cap; ru++)
+                    for (int rl = 0; rl < inst.lo_wt[i]; rl++)
+                        d_tab_val(i, ru, rl) = std::min(d_tab_val(i+1, ru-inst.up_wt[i], rl),
+                                d_tab_val(i+1, ru, rl));
+
+            if (min_upper[i] <= inst.up_wt[i])
+                #pragma omp for nowait
+                for (int ru = 0; ru < inst.up_wt[i]; ru++)
+                    for (int rl = std::max(min_lower[i], inst.lo_wt[i]); rl <= inst.lo_cap; rl++)
+                        d_tab_val(i, ru, rl) = std::max(
+                                P(d_tab_val(i+1, ru, rl-inst.lo_wt[i])+inst.pft[i]),
+                                d_tab_val(i+1, ru, rl));
+        }
     }
 }
 
@@ -726,10 +784,14 @@ template<typename P>
 BKPSolution<max_pft_t> Comb_BKPSolver<P>::greedy_ub() {
     BKPSolution<max_pft_t> bkpsol(inst.n);
 
+    int n_total = 0;
     knapsacksolver::Instance kpinst;
     kpinst.set_capacity(inst.up_cap);
-    for (int i = 0; i < inst.n; i++)
-        kpinst.add_item(inst.up_wt[i], inst.pft[i]);
+    for (int i = 0; i < inst.n; i++) {
+        n_total += inst.cnt[i];
+        for (int j = 0; j < inst.cnt[i]; j++)
+            kpinst.add_item(inst.up_wt[i], inst.pft[i]);
+    }
     knapsacksolver::DynamicProgrammingPrimalDualOptionalParameters param;
     param.set_combo();
     auto output = knapsacksolver::dynamic_programming_primal_dual(kpinst, param);
@@ -737,21 +799,31 @@ BKPSolution<max_pft_t> Comb_BKPSolver<P>::greedy_ub() {
 
     knapsacksolver::Instance finst;
     finst.set_capacity(inst.lo_cap);
-    for (int i = 0; i < inst.n; i++) {
-        if (!sol.contains_idx(i)) {
-            finst.add_item(inst.lo_wt[i], inst.pft[i]);
-            bkpsol.up_sol[i] = 0;
-        } else {
-            finst.add_item(inst.lo_wt[i], 0);
-            bkpsol.up_sol[i] = 1;
+    int orig_i = 0, j = 0;
+    for (int i = 0; i < n_total; i++, j++) {
+        if (j == inst.cnt[orig_i]) {
+            j = 0;
+            orig_i++;
         }
+        if (!sol.contains_idx(i))
+            finst.add_item(inst.lo_wt[orig_i], inst.pft[orig_i]);
+        else
+            finst.add_item(inst.lo_wt[orig_i], 0);
     }
     auto foutput = knapsacksolver::dynamic_programming_primal_dual(finst, param);
     auto fsol = foutput.solution;
-    for (int i = 0; i < inst.n; i++) {
-        if (sol.contains_idx(i)) continue;
-        if (fsol.contains_idx(i)) bkpsol.lo_sol[i] = 1;
-        else bkpsol.lo_sol[i] = 0;
+    orig_i = 0; j = 0;
+    for (int i = 0; i < n_total; i++, j++) {
+        if (j == inst.cnt[orig_i]) {
+            j = 0;
+            orig_i++;
+        }
+        if (sol.contains_idx(i)) {
+            bkpsol.up_sol[orig_i]++;
+            continue;
+        }
+        if (fsol.contains_idx(i))
+            bkpsol.lo_sol[orig_i]++;
     }
     bkpsol.pft = fsol.profit();
     return bkpsol;
@@ -761,12 +833,26 @@ template<typename P>
 double Comb_BKPSolver<P>::dcs_lb() {
     grb_env.set("Threads", "1");
 
-    int clb = BKPSolver<P>::find_crit_lb();
-    int cub = BKPSolver<P>::find_crit_ub();
+    // expand any items that have a count attached into multiple items
+    inst_exp.lo_cap = inst.lo_cap;
+    inst_exp.up_cap = inst.up_cap;
+    inst_exp.n = 0;
+    for (int i = 0; i < inst.n; i++) {
+        inst_exp.n += inst.cnt[i];
+        for (int j = 0; j < inst.cnt[i]; j++) {
+            inst_exp.lo_wt.push_back(inst.lo_wt[i]);
+            inst_exp.up_wt.push_back(inst.up_wt[i]);
+            inst_exp.pft.push_back(inst.pft[i]);
+            inst_exp.cnt.push_back(1);
+        }
+    }
+
+    int clb = BKPSolver<P>::find_crit_lb(inst_exp);
+    int cub = BKPSolver<P>::find_crit_ub(inst_exp);
     double best = INFINITY;
     omp_set_num_threads(num_threads);
     #pragma omp parallel for
-    for (int c = clb; c <= std::min(int(inst.n)-1, cub); c++) {
+    for (int c = clb; c <= std::min(int(inst_exp.n)-1, cub); c++) {
         double lb = dcs_lb(c);
         #pragma omp critical
         best = std::min(best, lb);
@@ -783,19 +869,19 @@ double Comb_BKPSolver<P>::dcs_lb(int c) {
     for (int i = 0; i < c; i++) {
         GRBVar var = model.addVar(0.0, 1.0, 0.0, GRB_CONTINUOUS, "x" + std::to_string(i));
         vars.push_back(var);
-        obj += inst.pft[i] - var*inst.pft[i];
+        obj += inst_exp.pft[i] - var*inst_exp.pft[i];
     }
     model.setObjective(obj, GRB_MINIMIZE);
 
     GRBLinExpr up_kp = 0.0;
     for (int i = 0; i < c; i++)
-        up_kp += vars[i]*inst.up_wt[i];
-    model.addConstr(up_kp <= inst.up_cap, "up_kp");
+        up_kp += vars[i]*inst_exp.up_wt[i];
+    model.addConstr(up_kp <= inst_exp.up_cap, "up_kp");
     GRBLinExpr lo_kp = 0.0;
     for (int i = 0; i < c; i++)
-        lo_kp += inst.lo_wt[i] - vars[i]*inst.lo_wt[i];
-    model.addConstr(lo_kp <= inst.lo_cap, "lo_kp");
-    model.addConstr(lo_kp >= inst.lo_cap - inst.lo_wt[c] + 1, "lo_crit");
+        lo_kp += inst_exp.lo_wt[i] - vars[i]*inst_exp.lo_wt[i];
+    model.addConstr(lo_kp <= inst_exp.lo_cap, "lo_kp");
+    model.addConstr(lo_kp >= inst_exp.lo_cap - inst_exp.lo_wt[c] + 1, "lo_crit");
 
     model.optimize();
     if (model.get(GRB_IntAttr_SolCount) == 0)
@@ -823,4 +909,46 @@ void Comb_BKPSolver<P>::dump_lower_bound() {
         os.flush();
         os.close();
     }
+}
+
+template<typename P>
+void Comb_BKPSolver<P>::deduplicate_instance() {
+    // assumes the instance is already sorted
+    BKPInstance new_inst;
+    new_inst.n = 0;
+    new_inst.up_cap = inst.up_cap;
+    new_inst.lo_cap = inst.lo_cap;
+    int count = 1;
+    for (int i = 1; i < inst.n; i++) {
+        if (inst.lo_wt[i-1] == inst.lo_wt[i] && inst.up_wt[i-1] == inst.up_wt[i] && inst.pft[i-1] == inst.pft[i])
+            count++;
+        else {
+            new_inst.n++;
+            new_inst.up_wt.push_back(inst.up_wt[i-1]);
+            new_inst.lo_wt.push_back(inst.lo_wt[i-1]);
+            new_inst.pft.push_back(inst.pft[i-1]);
+            new_inst.cnt.push_back(count);
+            count = 1;
+        }
+    }
+    // final item is missed by the loop
+    new_inst.n++;
+    new_inst.up_wt.push_back(inst.up_wt[inst.n-1]);
+    new_inst.lo_wt.push_back(inst.lo_wt[inst.n-1]);
+    new_inst.pft.push_back(inst.pft[inst.n-1]);
+    new_inst.cnt.push_back(count);
+    inst = new_inst;
+}
+
+template<typename P>
+BKPSolution<P> Comb_BKPSolver<P>::reduplicate_sol(BKPSolution<P> &sol) {
+    BKPSolution<P> new_sol(0);
+    new_sol.pft = sol.pft;
+    for (int i = 0; i < inst.n; i++) {
+        for (int j = 0; j < inst.cnt[i]; j++) {
+            new_sol.lo_sol.push_back(j < sol.lo_sol[i]);
+            new_sol.up_sol.push_back(j < sol.up_sol[i]);
+        }
+    }
+    return new_sol;
 }

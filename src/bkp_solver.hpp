@@ -13,7 +13,7 @@ using max_pft_t = uint32_t;
 template<typename P>
 struct BKPSolution {
     P pft;
-    std::vector<uint8_t> up_sol, lo_sol;
+    std::vector<int> up_sol, lo_sol;
 
     BKPSolution(size_t n) : pft(0), up_sol(n), lo_sol(n) {}
     template<typename Q>
@@ -34,8 +34,8 @@ public:
 protected:
     void sort_inst();
     void unsort_sol(BKPSolution<P> &sol);
-    int find_crit_lb();
-    int find_crit_ub();
+    int find_crit_lb(BKPInstance &inst);
+    int find_crit_ub(BKPInstance &inst);
     int solve_knapsack(size_t n, std::vector<int> pft, std::vector<int> weight, int cap);
 
     BKPInstance inst;
@@ -67,18 +67,20 @@ void BKPSolver<P>::sort_inst() {
         inst.up_wt[i] = copy.up_wt[pi[i]];
         inst.lo_wt[i] = copy.lo_wt[pi[i]];
         inst.pft[i] = copy.pft[pi[i]];
+        inst.cnt[i] = copy.cnt[pi[i]];
     }
 }
 template<typename P>
 void BKPSolver<P>::unsort_sol(BKPSolution<P> &sol) {
     BKPSolution<P> copy = sol;
-    for (int i = 0; i < inst.n; i++) {
+    ASSERT(sol.lo_sol.size() == sol.up_sol.size());
+    for (int i = 0; i < sol.lo_sol.size(); i++) {
         sol.lo_sol[pi[i]] = copy.lo_sol[i];
         sol.up_sol[pi[i]] = copy.up_sol[i];
     }
 }
 template<typename P>
-int BKPSolver<P>::find_crit_lb() {
+int BKPSolver<P>::find_crit_lb(BKPInstance &inst) {
     int w = 0;
     for (int i = 0; i < inst.n; i++) {
         w += inst.lo_wt[i];
@@ -88,7 +90,7 @@ int BKPSolver<P>::find_crit_lb() {
     return inst.n;
 }
 template<typename P>
-int BKPSolver<P>::find_crit_ub() {
+int BKPSolver<P>::find_crit_ub(BKPInstance &inst) {
     int z = solve_knapsack(inst.n, inst.lo_wt, inst.up_wt, inst.up_cap);
     int w = 0;
     for (int i = 0; i < inst.n; i++) {

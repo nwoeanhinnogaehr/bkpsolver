@@ -4,6 +4,8 @@ This repo contains the code accompanying the paper titled "A Fast Combinatorial 
 
 Preprint: https://optimization-online.org/2022/10/a-fast-combinatorial-algorithm-for-the-bilevel-knapsack-problem-with-interdiction-constraints/
 
+IPCO paper (conference version): https://doi.org/10.1007/978-3-031-32726-1_31
+
 # Building
 
 This code has only been tested on Linux. First, you will want to clone this repo.

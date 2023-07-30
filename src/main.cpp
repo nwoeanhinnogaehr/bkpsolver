@@ -9,7 +9,7 @@ using namespace clipp;
 int main(int argc, char **argv) {
     int alpha = 2, beta = 2, delta = 30, mu = 250, gamma = 5, omega = 3;
     int lookback = 0;
-    bool quiet, use_file, best_prefix = false, lb_only = false, no_dedup = false;
+    bool quiet, use_file, best_prefix = false, lb_only = false, dedup = false;
     double density_threshold = 0.02, prefix_density_threshold = 0.02;
     int num_threads = 4;
     string filename;
@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
                 option("-p").set(best_prefix) % "search for best prefix (try this if number of leaves is large)",
                 (option("-dt") & number("density_threshold=0.02", density_threshold)) % "density threshold for switching to dense DP table",
                 (option("-pdt") & number("prefix_density_threshold=0.02", prefix_density_threshold)) % "density threshold for switching to dense prefix DP table",
-                option("-no-dedup").set(no_dedup) % "don't deduplicate items",
+                option("-dedup").set(dedup) % "deduplicate items and use bounded knapsack solver",
                 option("-lb-only").set(lb_only) % "compute lower bound only"),
         option("-q").set(quiet) % "quiet mode: do not log to stderr",
         (option("-j") & integer("num_threads=4", num_threads)) % "number of threads to use for multithreaded code",
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     comb_solver_16.lb_only = lb_only;
     comb_solver_16.density_threshold = density_threshold;
     comb_solver_16.prefix_density_threshold = prefix_density_threshold;
-    comb_solver_16.do_dedup = !no_dedup;
+    comb_solver_16.do_dedup = dedup;
 
     Comb_BKPSolver<uint32_t> comb_solver_32(inst);
     comb_solver_32.log = !quiet;
@@ -81,7 +81,7 @@ int main(int argc, char **argv) {
     comb_solver_32.lb_only = lb_only;
     comb_solver_32.density_threshold = density_threshold;
     comb_solver_32.prefix_density_threshold = prefix_density_threshold;
-    comb_solver_32.do_dedup = !no_dedup;
+    comb_solver_32.do_dedup = dedup;
 
     DCS_BKPSolver dcs_solver(inst);
     dcs_solver.log = !quiet;
